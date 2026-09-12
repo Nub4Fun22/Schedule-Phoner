@@ -1,0 +1,30 @@
+name: school_schedule
+description: A clean school timetable app with weekly grid and day views, event details, and per-event/all notifications.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.19.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  # Local notifications (single event + all events)
+  flutter_local_notifications: ^17.2.3
+  # Timezone-aware scheduling required by flutter_local_notifications
+  timezone: ^0.9.4
+  flutter_timezone: ^3.0.1
+  # Simple state management
+  provider: ^6.1.2
+  # Local persistence for events and settings
+  shared_preferences: ^2.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
