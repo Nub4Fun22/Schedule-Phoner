@@ -15,7 +15,9 @@ dependencies:
   flutter_local_notifications: ^17.2.3
   # Timezone-aware scheduling required by flutter_local_notifications
   timezone: ^0.9.4
-  flutter_timezone: ^3.0.1
+  # Pinned to the 1.x line, whose getLocalTimezone() returns a String
+  # (the 3.x line changed it to a TimezoneInfo object).
+  flutter_timezone: ">=1.0.8 <2.0.0"
   # Simple state management
   provider: ^6.1.2
   # Local persistence for events and settings
