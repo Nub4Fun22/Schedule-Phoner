@@ -86,24 +86,17 @@ class SettingsScreen extends StatelessWidget {
           ),
           ListTile(
             leading: const Icon(Icons.notification_add_outlined),
-            title: const Text('Send a test notification'),
-            subtitle: const Text('Check that reminders work on this device'),
-            onTap: () async {
-              await NotificationService.instance.requestPermissions();
-              final enabled =
-                  await NotificationService.instance.areNotificationsEnabled();
-              await NotificationService.instance.showTestNotification(
-                sound: settings.notificationSound,
-                vibrate: settings.vibrate,
-              );
-              if (!context.mounted) return;
-              _snack(
-                  context,
-                  enabled
-                      ? 'Test notification sent — check your notification shade'
-                      : 'Notifications are blocked for this app — enable them '
-                          'in Android settings');
-            },
+            title: const Text('Send a test notification now'),
+            subtitle: const Text('Fires instantly — confirms notifications '
+                'are allowed'),
+            onTap: () => _runInstantTest(context, settings),
+          ),
+          ListTile(
+            leading: const Icon(Icons.schedule_outlined),
+            title: const Text('Test a scheduled reminder (10s)'),
+            subtitle: const Text('Fires in 10 seconds — confirms timed '
+                'reminders work'),
+            onTap: () => _runScheduledTest(context, settings),
           ),
 
           const Divider(),
@@ -193,6 +186,74 @@ class SettingsScreen extends StatelessWidget {
               fontWeight: FontWeight.w700,
               letterSpacing: 0.5,
             ),
+      ),
+    );
+  }
+
+  Future<void> _runInstantTest(
+      BuildContext context, SettingsStore settings) async {
+    final svc = NotificationService.instance;
+    await svc.requestPermissions();
+    final enabled = await svc.areNotificationsEnabled();
+    if (!enabled) {
+      if (context.mounted) {
+        _showBlockedDialog(context);
+      }
+      return;
+    }
+    await svc.showTestNotification(
+      sound: settings.notificationSound,
+      vibrate: settings.vibrate,
+    );
+    if (context.mounted) {
+      _snack(context, 'Sent — check your notification shade now');
+    }
+  }
+
+  Future<void> _runScheduledTest(
+      BuildContext context, SettingsStore settings) async {
+    final svc = NotificationService.instance;
+    await svc.requestPermissions();
+    final enabled = await svc.areNotificationsEnabled();
+    if (!enabled) {
+      if (context.mounted) _showBlockedDialog(context);
+      return;
+    }
+    final exact = await svc.canScheduleExactAlarms();
+    await svc.scheduleTestNotification(
+      sound: settings.notificationSound,
+      vibrate: settings.vibrate,
+      seconds: 10,
+    );
+    if (context.mounted) {
+      _snack(
+        context,
+        exact
+            ? 'Scheduled — it should pop in ~10 seconds'
+            : 'Scheduled (~10s). Exact alarms are OFF, so it may be delayed. '
+                'Enable "Alarms & reminders" for this app in Android settings.',
+      );
+    }
+  }
+
+  void _showBlockedDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.notifications_off_outlined),
+        title: const Text('Notifications are blocked'),
+        content: const Text(
+            'Android is blocking notifications for this app, so reminders '
+            'can\'t appear.\n\n'
+            'Open Android Settings → Apps → Schedule Phoner → Notifications '
+            'and turn them on. Also check "Alarms & reminders" is allowed so '
+            'timed reminders fire precisely.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
       ),
     );
   }

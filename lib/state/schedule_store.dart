@@ -76,6 +76,30 @@ class ScheduleStore extends ChangeNotifier {
     return list;
   }
 
+  /// Items to show on the weekly grid for [weekday]: all recurring weekly items
+  /// on that day, PLUS any one-time items whose date falls in the CURRENT week
+  /// (Mon–Sun) on that weekday. Sorted by start time. This is why a one-time
+  /// test added for "this Saturday" now appears in Saturday's grid column.
+  List<ScheduleItem> gridItemsForDay(int weekday) {
+    final now = DateTime.now();
+    // Monday 00:00 of the current week.
+    final startOfToday = DateTime(now.year, now.month, now.day);
+    final startOfWeek = startOfToday.subtract(Duration(days: now.weekday - 1));
+    final endOfWeek = startOfWeek.add(const Duration(days: 7)); // exclusive
+
+    final list = _items.where((e) {
+      if (!e.oneTime) return e.weekday == weekday;
+      final d = e.date;
+      if (d == null) return false;
+      final dayOnly = DateTime(d.year, d.month, d.day);
+      return d.weekday == weekday &&
+          !dayOnly.isBefore(startOfWeek) &&
+          dayOnly.isBefore(endOfWeek);
+    }).toList();
+    list.sort((a, b) => a.start.inMinutes.compareTo(b.start.inMinutes));
+    return list;
+  }
+
   /// All labs (for linking homework/projects).
   List<ScheduleItem> get labs =>
       _items.where((e) => e.type == ItemType.lab).toList();
