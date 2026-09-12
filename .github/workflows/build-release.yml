@@ -60,6 +60,23 @@ jobs:
             echo "No android_overlay/ to apply"
           fi
 
+      - name: Bump Kotlin Gradle plugin to 2.1.0
+        # home_widget's precompiled deps use Kotlin metadata 2.1.0, but the
+        # Flutter-generated project pins an older Kotlin compiler (1.8.x) that
+        # can't read them. Force the Kotlin Android plugin to 2.1.0.
+        run: |
+          set -e
+          for f in android/settings.gradle.kts android/settings.gradle android/build.gradle android/build.gradle.kts; do
+            [ -f "$f" ] || continue
+            # Matches: id("org.jetbrains.kotlin.android") version "1.8.22"
+            #      or: id "org.jetbrains.kotlin.android" version "1.8.22"
+            sed -i -E 's/(org\.jetbrains\.kotlin\.android"?\)?[[:space:]]+version[[:space:]]+")[0-9]+\.[0-9]+\.[0-9]+(")/\12.1.0\2/g' "$f"
+            # Matches: ext.kotlin_version = '1.8.22'
+            sed -i -E "s/(kotlin_version[[:space:]]*=[[:space:]]*['\"])[0-9]+\.[0-9]+\.[0-9]+(['\"])/\12.1.0\2/g" "$f"
+            echo "----- $f (kotlin lines) -----"
+            grep -nE "kotlin" "$f" || true
+          done
+
       - name: Get dependencies
         run: flutter pub get
 
