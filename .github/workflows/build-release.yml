@@ -60,6 +60,21 @@ jobs:
             echo "No android_overlay/ to apply"
           fi
 
+      - name: Force compileSdk/targetSdk to 35
+        # androidx.work (via home_widget) requires compileSdk >= 35, but the
+        # Flutter 3.24.5 template defaults to 34. Patch the app module.
+        run: |
+          set -e
+          for f in android/app/build.gradle android/app/build.gradle.kts; do
+            [ -f "$f" ] || continue
+            # compileSdk 34 / compileSdkVersion 34  ->  35
+            sed -i -E 's/(compileSdk(Version)?[[:space:]]*=?[[:space:]]*)(34|flutter\.compileSdkVersion)/\135/g' "$f"
+            # targetSdk 34 / targetSdkVersion 34  ->  35
+            sed -i -E 's/(targetSdk(Version)?[[:space:]]*=?[[:space:]]*)(34|flutter\.targetSdkVersion)/\135/g' "$f"
+            echo "----- $f (sdk lines) -----"
+            grep -nE "compileSdk|targetSdk" "$f" || true
+          done
+
       - name: Bump Kotlin Gradle plugin to 2.1.0
         # home_widget's precompiled deps use Kotlin metadata 2.1.0, but the
         # Flutter-generated project pins an older Kotlin compiler (1.8.x) that
