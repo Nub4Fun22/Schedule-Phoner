@@ -161,13 +161,26 @@ class ScheduleStore extends ChangeNotifier {
   }
 
   /// Exams sorted by date (soonest first).
-  List<ScheduleItem> examsByDate() {
-    final list = _items.where((e) => e.type == ItemType.exam).toList();
-    list.sort((a, b) {
-      final da = a.date ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final db = b.date ?? DateTime.fromMillisecondsSinceEpoch(0);
-      return da.compareTo(db);
-    });
+  List<ScheduleItem> examsByDate() => _itemsOfTypeByNextOccurrence(ItemType.exam);
+
+  /// Tests sorted by their next occurrence (soonest first). Includes both
+  /// weekly and one-time tests.
+  List<ScheduleItem> testsByNext() =>
+      _itemsOfTypeByNextOccurrence(ItemType.test);
+
+  /// Project presentations sorted by date (soonest first).
+  List<ScheduleItem> presentationsByDate() =>
+      _itemsOfTypeByNextOccurrence(ItemType.projectPresentation);
+
+  /// Items of [type] sorted by their next upcoming occurrence (soonest first).
+  /// Weekly items use their next weekday occurrence; one-time items use their
+  /// date. Items with no future occurrence sort to the end.
+  List<ScheduleItem> _itemsOfTypeByNextOccurrence(ItemType type) {
+    final now = DateTime.now();
+    final list = _items.where((e) => e.type == type).toList();
+    DateTime keyFor(ScheduleItem e) =>
+        e.nextOccurrence(now) ?? DateTime.fromMillisecondsSinceEpoch(1 << 62);
+    list.sort((a, b) => keyFor(a).compareTo(keyFor(b)));
     return list;
   }
 
@@ -240,22 +253,34 @@ class ScheduleStore extends ChangeNotifier {
   }
 
   Future<void> _rescheduleAll() async {
-    await _notifications.rescheduleAll(
-      items: _items,
-      homeworks: _homeworks,
-      sound: _notificationSound,
-      vibrate: _notificationVibrate,
-    );
-    // Keep the home-screen widget in sync with the next two items.
-    final upcomingForWidget = widgetUpcoming(limit: 2);
-    await WidgetService.instance.updateNextItem(
-      item: upcomingForWidget.isNotEmpty ? upcomingForWidget[0].item : null,
-      occurrenceWhen:
-          upcomingForWidget.isNotEmpty ? upcomingForWidget[0].when : null,
-      following: upcomingForWidget.length > 1 ? upcomingForWidget[1].item : null,
-      followingWhen:
-          upcomingForWidget.length > 1 ? upcomingForWidget[1].when : null,
-    );
+    // Notifications + widget updates are best-effort side effects. Never let a
+    // platform exception here (e.g. exact-alarm permission, widget plugin)
+    // propagate up and break the calling flow (like closing the editor).
+    try {
+      await _notifications.rescheduleAll(
+        items: _items,
+        homeworks: _homeworks,
+        sound: _notificationSound,
+        vibrate: _notificationVibrate,
+      );
+    } catch (e) {
+      debugPrint('rescheduleAll (notifications) failed: $e');
+    }
+    try {
+      // Keep the home-screen widget in sync with the next two items.
+      final upcomingForWidget = widgetUpcoming(limit: 2);
+      await WidgetService.instance.updateNextItem(
+        item: upcomingForWidget.isNotEmpty ? upcomingForWidget[0].item : null,
+        occurrenceWhen:
+            upcomingForWidget.isNotEmpty ? upcomingForWidget[0].when : null,
+        following:
+            upcomingForWidget.length > 1 ? upcomingForWidget[1].item : null,
+        followingWhen:
+            upcomingForWidget.length > 1 ? upcomingForWidget[1].when : null,
+      );
+    } catch (e) {
+      debugPrint('rescheduleAll (widget) failed: $e');
+    }
   }
 
   // ---------------------------------------------------------------------------

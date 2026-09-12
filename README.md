@@ -23,8 +23,9 @@ A clean Flutter timetable app for your school schedule. **Android now, iOS later
   - **Grid** — Excel-like weekly grid of recurring items.
   - **Day** — a chosen weekday's items as a list, with homework badges on labs.
   - **What's next** — everything upcoming by time, soonest first, with a countdown.
-  - **Priority** — split screen: **Homework on top** (soonest due = highest),
-    **Exams below** (soonest first).
+  - **Priority** — priority-ordered sections, top to bottom:
+    **Homework → Tests → Project presentations → Exams**, each sorted
+    soonest-first (nearest date = most urgent).
 - **Notifications** — silent by default (no sound); importance scales with item
   priority (exams are the most prominent, courses the least). A **Settings**
   screen lets you switch to a **sound**, toggle **vibration**, set a default
