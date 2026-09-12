@@ -1,140 +1,103 @@
-import '../models/schedule_event.dart';
+import '../models/schedule_item.dart';
 
-/// Sample timetable used on first launch. The user can edit/add/delete these,
-/// or replace them with their real school schedule via the in-app editor.
-///
-/// Colors are chosen to be visually distinct per subject.
+/// A tiny demo dataset the user can optionally load from Settings to see how
+/// the different item types look. NOT loaded on a fresh install.
+class SampleData {
+  final List<ScheduleItem> items;
+  final List<Homework> homeworks;
+  const SampleData({required this.items, required this.homeworks});
+}
+
 class SampleSchedule {
-  // A small palette of pleasant, distinct colors (ARGB ints).
   static const int _blue = 0xFF3F51B5;
   static const int _teal = 0xFF00897B;
   static const int _orange = 0xFFEF6C00;
   static const int _purple = 0xFF8E24AA;
-  static const int _green = 0xFF43A047;
   static const int _red = 0xFFE53935;
-  static const int _brown = 0xFF6D4C41;
 
-  static List<ScheduleEvent> build() {
-    return [
-      // ---- Monday ----
-      const ScheduleEvent(
-        id: 'mon-math',
+  static SampleData build() {
+    final now = DateTime.now();
+    final nextWeek = now.add(const Duration(days: 7));
+    final inTenDays = now.add(const Duration(days: 10));
+
+    final items = <ScheduleItem>[
+      // Course (weekly, permanent)
+      const ScheduleItem(
+        id: 'demo-math-course',
+        type: ItemType.course,
         title: 'Mathematics',
-        description: 'Calculus — lecture hall A1',
+        description: 'Calculus lecture',
         location: 'Room A1',
+        oneTime: false,
         weekday: Weekday.monday,
         start: SlotTime(8, 0),
         end: SlotTime(9, 30),
         colorValue: _blue,
       ),
-      const ScheduleEvent(
-        id: 'mon-cs',
+      // Lab (weekly, permanent, can carry homework)
+      const ScheduleItem(
+        id: 'demo-cs-lab',
+        type: ItemType.lab,
         title: 'Computer Science',
-        description: 'Programming fundamentals — lab',
+        description: 'Programming lab',
         location: 'Lab 2',
-        weekday: Weekday.monday,
-        start: SlotTime(9, 45),
-        end: SlotTime(11, 15),
-        colorValue: _teal,
-      ),
-      const ScheduleEvent(
-        id: 'mon-eng',
-        title: 'English',
-        description: 'Academic writing',
-        location: 'Room B3',
-        weekday: Weekday.monday,
-        start: SlotTime(11, 30),
-        end: SlotTime(13, 0),
-        colorValue: _orange,
-      ),
-
-      // ---- Tuesday ----
-      const ScheduleEvent(
-        id: 'tue-phys',
-        title: 'Physics',
-        description: 'Mechanics — lecture',
-        location: 'Room A2',
+        oneTime: false,
         weekday: Weekday.tuesday,
         start: SlotTime(10, 0),
-        end: SlotTime(11, 30),
-        colorValue: _purple,
+        end: SlotTime(12, 0),
+        colorValue: _teal,
       ),
-      const ScheduleEvent(
-        id: 'tue-cs-sem',
-        title: 'CS Seminar',
-        description: 'Algorithms problem session',
+      // Weekly test
+      const ScheduleItem(
+        id: 'demo-eng-test',
+        type: ItemType.test,
+        title: 'English',
+        description: 'Weekly vocabulary test',
+        location: 'Room B3',
+        oneTime: false,
+        weekday: Weekday.wednesday,
+        start: SlotTime(11, 0),
+        end: SlotTime(11, 30),
+        colorValue: _orange,
+      ),
+      // One-time project presentation
+      ScheduleItem(
+        id: 'demo-presentation',
+        type: ItemType.projectPresentation,
+        title: 'CS Project',
+        description: 'Final presentation',
         location: 'Room C1',
-        weekday: Weekday.tuesday,
-        start: SlotTime(11, 45),
-        end: SlotTime(13, 15),
-        colorValue: _teal,
-      ),
-
-      // ---- Wednesday ----
-      const ScheduleEvent(
-        id: 'wed-math-sem',
-        title: 'Math Seminar',
-        description: 'Exercises and Q&A',
-        location: 'Room A1',
-        weekday: Weekday.wednesday,
-        start: SlotTime(8, 0),
-        end: SlotTime(9, 30),
-        colorValue: _blue,
-      ),
-      const ScheduleEvent(
-        id: 'wed-chem',
-        title: 'Chemistry',
-        description: 'Organic chemistry lab',
-        location: 'Lab 4',
-        weekday: Weekday.wednesday,
-        start: SlotTime(9, 45),
-        end: SlotTime(12, 0),
-        colorValue: _green,
-      ),
-
-      // ---- Thursday ----
-      const ScheduleEvent(
-        id: 'thu-db',
-        title: 'Databases',
-        description: 'SQL and relational modeling',
-        location: 'Lab 2',
-        weekday: Weekday.thursday,
-        start: SlotTime(10, 0),
-        end: SlotTime(11, 30),
-        colorValue: _brown,
-      ),
-      const ScheduleEvent(
-        id: 'thu-eng',
-        title: 'English',
-        description: 'Presentations workshop',
-        location: 'Room B3',
-        weekday: Weekday.thursday,
-        start: SlotTime(11, 45),
-        end: SlotTime(13, 15),
-        colorValue: _orange,
-      ),
-
-      // ---- Friday ----
-      const ScheduleEvent(
-        id: 'fri-phys-lab',
-        title: 'Physics Lab',
-        description: 'Measurement experiments',
-        location: 'Lab 1',
-        weekday: Weekday.friday,
-        start: SlotTime(8, 0),
-        end: SlotTime(10, 15),
+        oneTime: true,
+        date: nextWeek,
+        start: const SlotTime(14, 0),
+        end: const SlotTime(15, 0),
         colorValue: _purple,
       ),
-      const ScheduleEvent(
-        id: 'fri-sport',
-        title: 'Sports',
-        description: 'Physical education',
-        location: 'Gym',
-        weekday: Weekday.friday,
-        start: SlotTime(10, 30),
-        end: SlotTime(12, 0),
+      // One-time exam (highest priority)
+      ScheduleItem(
+        id: 'demo-exam',
+        type: ItemType.exam,
+        title: 'Mathematics',
+        description: 'Final exam',
+        location: 'Hall 1',
+        oneTime: true,
+        date: inTenDays,
+        start: const SlotTime(9, 0),
+        end: const SlotTime(11, 0),
         colorValue: _red,
       ),
     ];
+
+    final homeworks = <Homework>[
+      // Homework attached to the CS lab, due in 5 days.
+      Homework(
+        id: 'demo-hw-1',
+        labId: 'demo-cs-lab',
+        description: 'Finish exercises 1–5',
+        dueDate: now.add(const Duration(days: 5)),
+      ),
+    ];
+
+    return SampleData(items: items, homeworks: homeworks);
   }
 }

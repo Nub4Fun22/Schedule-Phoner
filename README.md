@@ -4,18 +4,32 @@ A clean Flutter timetable app for your school schedule. **Android now, iOS later
 
 ## Features
 
-- **Two views of your week**
-  - **Weekly grid** — Excel-like layout: weekdays across the top, hours down the side, each class shown as a colored block sized to its duration.
-  - **By day** — pick a weekday and see that day's classes as a clean chronological list.
-- **Tap any class for details** — subject, day, time interval, **duration**, location, and description.
-- **Notifications**
-  - Toggle a reminder **for a single class** (with a configurable lead time: at start / 5 / 10 / 15 / 30 / 60 min before).
-  - Toggle reminders **for all classes at once** (bell icon in the top bar → "Notify me for all classes").
-  - Reminders repeat **weekly** at the class time.
-- **Edit your schedule in-app** — add, edit, and delete classes; choose a color per subject.
-- **Sample schedule included** — the app starts with a sample Mon–Fri timetable you can edit or replace. "Reset to sample schedule" is in the settings sheet.
-- **Data is saved on device** (via `shared_preferences`) and survives restarts.
-- **Light & dark theme** (follows the system).
+- **Starts empty** — add your own items; nothing is pre-filled. (A demo dataset
+  can be loaded any time from the settings sheet.)
+- **Typed academic items**, each with its own behavior and priority
+  (low → high: **Course < Lab < (Homework = Project) < Test < Presentation < Exam**):
+  - **Course** — permanent weekly reminder.
+  - **Lab** — permanent weekly reminder; can carry **Homework**.
+  - **Homework** — attached to a lab; has an optional description, a due date,
+    and a **done** checkbox. Reminds you before **each** occurrence of that lab
+    (default: 1 day before) and repeats **weekly until you mark it done or the
+    due date passes**.
+  - **Test** — one-time **or** weekly.
+  - **Project** — one-time or weekly, meant to be linked to a lab.
+  - **Project presentation** — one-time.
+  - **Exam** — one-time, highest priority.
+- **Four views** (bottom navigation):
+  - **Grid** — Excel-like weekly grid of recurring items.
+  - **Day** — a chosen weekday's items as a list, with homework badges on labs.
+  - **What's next** — everything upcoming by time, soonest first, with a countdown.
+  - **Priority** — split screen: **Homework on top** (soonest due = highest),
+    **Exams below** (soonest first).
+- **Silent notifications** — no sound; importance scales with item priority
+  (exams are the most prominent, courses the least).
+- **Home-screen widget (Android)** — a **3×1** widget showing your next
+  Course / Lab / Test / Exam (not homework). Tap it to open the app.
+- **Burning-calendar app icon.**
+- **Data saved on device**; **light & dark** themes.
 
 ## Project structure
 
@@ -23,11 +37,12 @@ A clean Flutter timetable app for your school schedule. **Android now, iOS later
 lib/
   main.dart                     App entry, theme, provider wiring
   models/
-    schedule_event.dart         ScheduleEvent + SlotTime + Weekday helpers
+    schedule_item.dart          ScheduleItem, Homework, ItemType + priorities
   data/
-    sample_schedule.dart        The built-in sample timetable
+    sample_schedule.dart        Optional demo dataset (SampleData)
   services/
-    notification_service.dart   Local + timezone-aware weekly notifications
+    notification_service.dart   Silent, priority-based local notifications
+    widget_service.dart         Pushes "next item" data to the home widget
   state/
     schedule_store.dart         State + persistence (ChangeNotifier)
   screens/

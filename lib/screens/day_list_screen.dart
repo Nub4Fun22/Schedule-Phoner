@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/schedule_event.dart';
+import '../models/schedule_item.dart';
 import '../state/schedule_store.dart';
-import '../widgets/color_utils.dart';
-import 'event_details_screen.dart';
+import 'item_details_screen.dart';
 
-/// Day-by-day view: a row of selectable weekday chips, then a chronological
-/// list of that day's events. Tap an event to see full details.
+/// Day-by-day view: weekday chips, then that day's weekly items in order.
+/// Labs show a homework badge. Tap an item to open its details.
 class DayListScreen extends StatefulWidget {
   const DayListScreen({super.key});
 
@@ -22,50 +21,48 @@ class _DayListScreenState extends State<DayListScreen> {
   void initState() {
     super.initState();
     final today = DateTime.now().weekday;
-    // Default to today if it's a school day, otherwise Monday.
-    _selectedDay = Weekday.schoolWeek.contains(today) ? today : Weekday.monday;
+    _selectedDay = Weekday.fullWeek.contains(today) ? today : Weekday.monday;
   }
 
   @override
   Widget build(BuildContext context) {
     final store = context.watch<ScheduleStore>();
-    final events = store.eventsForDay(_selectedDay);
+    final items = store.weeklyItemsForDay(_selectedDay);
 
     return Column(
       children: [
-        _buildDaySelector(context),
+        _daySelector(context),
         const Divider(height: 1),
         Expanded(
-          child: events.isEmpty
-              ? _buildEmpty(context)
+          child: items.isEmpty
+              ? _empty(context)
               : ListView.separated(
                   padding: const EdgeInsets.all(12),
-                  itemCount: events.length,
+                  itemCount: items.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) =>
-                      _buildEventCard(context, events[index]),
+                  itemBuilder: (context, i) =>
+                      _itemCard(context, store, items[i]),
                 ),
         ),
       ],
     );
   }
 
-  Widget _buildDaySelector(BuildContext context) {
+  Widget _daySelector(BuildContext context) {
     final today = DateTime.now().weekday;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
         children: [
-          for (final day in Weekday.schoolWeek)
+          for (final day in Weekday.fullWeek)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: ChoiceChip(
                 label: Text(Weekday.short(day)),
                 selected: _selectedDay == day,
-                avatar: day == today
-                    ? const Icon(Icons.today, size: 16)
-                    : null,
+                avatar:
+                    day == today ? const Icon(Icons.today, size: 16) : null,
                 onSelected: (_) => setState(() => _selectedDay = day),
               ),
             ),
@@ -74,7 +71,7 @@ class _DayListScreenState extends State<DayListScreen> {
     );
   }
 
-  Widget _buildEmpty(BuildContext context) {
+  Widget _empty(BuildContext context) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -82,31 +79,30 @@ class _DayListScreenState extends State<DayListScreen> {
           Icon(Icons.free_breakfast_outlined,
               size: 56, color: Theme.of(context).disabledColor),
           const SizedBox(height: 12),
-          Text('No classes on ${Weekday.long(_selectedDay)}',
+          Text('Nothing on ${Weekday.long(_selectedDay)}',
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 4),
-          Text('Enjoy your free day!',
-              style: Theme.of(context).textTheme.bodySmall),
+          const Text('Tap "Add" to create a course, lab, test and more.'),
         ],
       ),
     );
   }
 
-  Widget _buildEventCard(BuildContext context, ScheduleEvent event) {
+  Widget _itemCard(
+      BuildContext context, ScheduleStore store, ScheduleItem item) {
+    final activeHw =
+        item.type == ItemType.lab ? store.activeHomeworksForLab(item.id) : const [];
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => EventDetailsScreen(eventId: event.id),
-          ),
-        ),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => ItemDetailsScreen(itemId: item.id))),
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(width: 6, color: event.color),
+              Container(width: 6, color: item.color),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(14),
@@ -115,40 +111,66 @@ class _DayListScreenState extends State<DayListScreen> {
                     children: [
                       Row(
                         children: [
+                          Icon(item.type.icon,
+                              size: 18, color: item.color),
+                          const SizedBox(width: 6),
                           Expanded(
                             child: Text(
-                              event.title,
+                              item.title,
                               style: Theme.of(context)
                                   .textTheme
                                   .titleMedium
                                   ?.copyWith(fontWeight: FontWeight.w700),
                             ),
                           ),
-                          if (event.notificationsEnabled)
+                          if (item.notificationsEnabled)
                             Icon(Icons.notifications_active,
-                                size: 18,
+                                size: 16,
                                 color: Theme.of(context).colorScheme.primary),
                         ],
                       ),
                       const SizedBox(height: 4),
                       Row(
                         children: [
+                          _typeBadge(context, item),
+                          const SizedBox(width: 8),
                           const Icon(Icons.schedule, size: 15),
                           const SizedBox(width: 4),
-                          Text(event.intervalLabel),
-                          const SizedBox(width: 10),
-                          Text('(${event.durationLabel})',
-                              style: Theme.of(context).textTheme.bodySmall),
+                          Text(item.intervalLabel),
                         ],
                       ),
-                      if (event.location.isNotEmpty) ...[
+                      if (item.location.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Row(
                           children: [
                             const Icon(Icons.place_outlined, size: 15),
                             const SizedBox(width: 4),
-                            Text(event.location),
+                            Text(item.location),
                           ],
+                        ),
+                      ],
+                      if (activeHw.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .errorContainer,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.assignment_late_outlined,
+                                  size: 14),
+                              const SizedBox(width: 4),
+                              Text('${activeHw.length} homework due',
+                                  style:
+                                      Theme.of(context).textTheme.bodySmall),
+                            ],
+                          ),
                         ),
                       ],
                     ],
@@ -163,6 +185,19 @@ class _DayListScreenState extends State<DayListScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _typeBadge(BuildContext context, ScheduleItem item) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: item.color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(item.type.label,
+          style: TextStyle(
+              color: item.color, fontSize: 11, fontWeight: FontWeight.w600)),
     );
   }
 }

@@ -49,8 +49,28 @@ jobs:
       - name: Generate Android platform files
         run: flutter create . --project-name school_schedule --platforms=android
 
+      - name: Apply Android native overlay (home-screen widget)
+        # Copies committed native widget files (Kotlin provider + res/ layouts)
+        # into the freshly generated android/ tree. Uses cp -r so it merges.
+        run: |
+          if [ -d android_overlay ]; then
+            echo "Applying android_overlay/ -> android/"
+            cp -rv android_overlay/* android/
+          else
+            echo "No android_overlay/ to apply"
+          fi
+
       - name: Get dependencies
         run: flutter pub get
+
+      - name: Generate launcher icons (if source image present)
+        run: |
+          if [ -f assets/icon/app_icon.png ]; then
+            echo "Found app_icon.png — generating launcher icons"
+            dart run flutter_launcher_icons
+          else
+            echo "No assets/icon/app_icon.png found — keeping default icon"
+          fi
 
       - name: Build release APK
         run: flutter build apk --release

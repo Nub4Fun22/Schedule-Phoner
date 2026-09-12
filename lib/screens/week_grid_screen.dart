@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/schedule_event.dart';
+import '../models/schedule_item.dart';
 import '../state/schedule_store.dart';
 import '../widgets/color_utils.dart';
-import 'event_details_screen.dart';
+import 'item_details_screen.dart';
 
-/// Excel-like weekly grid: weekdays across the top, hours down the left,
-/// event blocks positioned and sized by their time interval.
+/// Excel-like weekly grid of the recurring items (courses, labs, weekly
+/// tests/projects). One-time items (exams, presentations) live in the
+/// "What's next" / "Priority" screens.
 class WeekGridScreen extends StatelessWidget {
   const WeekGridScreen({super.key});
 
-  // Layout constants.
-  static const double _hourHeight = 64.0; // pixels per hour
+  static const double _hourHeight = 64.0;
   static const double _timeColWidth = 52.0;
   static const double _headerHeight = 40.0;
   static const double _minColWidth = 120.0;
@@ -21,17 +21,19 @@ class WeekGridScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = context.watch<ScheduleStore>();
     final days = Weekday.schoolWeek;
-    final events = store.events;
 
-    // Determine the visible time range from the data (fallback 8:00–18:00).
+    // Visible time range across all weekly items (fallback 8:00–18:00).
+    final weekly = store.items.where((e) => !e.oneTime).toList();
     int minMinutes = 8 * 60;
     int maxMinutes = 18 * 60;
-    if (events.isNotEmpty) {
-      minMinutes = events.map((e) => e.start.inMinutes).reduce((a, b) => a < b ? a : b);
-      maxMinutes = events.map((e) => e.end.inMinutes).reduce((a, b) => a > b ? a : b);
+    if (weekly.isNotEmpty) {
+      minMinutes =
+          weekly.map((e) => e.start.inMinutes).reduce((a, b) => a < b ? a : b);
+      maxMinutes =
+          weekly.map((e) => e.end.inMinutes).reduce((a, b) => a > b ? a : b);
     }
-    final startHour = (minMinutes ~/ 60);
-    final endHour = ((maxMinutes + 59) ~/ 60);
+    final startHour = minMinutes ~/ 60;
+    final endHour = (maxMinutes + 59) ~/ 60;
     final totalHours = (endHour - startHour).clamp(1, 24);
     final gridHeight = totalHours * _hourHeight;
 
@@ -48,7 +50,7 @@ class WeekGridScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildHeaderRow(context, days, colWidth),
+                _headerRow(context, days, colWidth),
                 Expanded(
                   child: SingleChildScrollView(
                     child: SizedBox(
@@ -56,16 +58,10 @@ class WeekGridScreen extends StatelessWidget {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildTimeColumn(context, startHour, endHour),
+                          _timeColumn(context, startHour, endHour),
                           for (final day in days)
-                            _buildDayColumn(
-                              context,
-                              store,
-                              day,
-                              colWidth,
-                              startHour,
-                              gridHeight,
-                            ),
+                            _dayColumn(context, store, day, colWidth,
+                                startHour, gridHeight),
                         ],
                       ),
                     ),
@@ -79,8 +75,7 @@ class WeekGridScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHeaderRow(
-      BuildContext context, List<int> days, double colWidth) {
+  Widget _headerRow(BuildContext context, List<int> days, double colWidth) {
     final today = DateTime.now().weekday;
     return SizedBox(
       height: _headerHeight,
@@ -93,7 +88,8 @@ class WeekGridScreen extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 border: Border(
-                  left: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.4)),
+                  left: BorderSide(
+                      color: Theme.of(context).dividerColor.withOpacity(0.4)),
                 ),
               ),
               child: Text(
@@ -111,7 +107,7 @@ class WeekGridScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTimeColumn(BuildContext context, int startHour, int endHour) {
+  Widget _timeColumn(BuildContext context, int startHour, int endHour) {
     return SizedBox(
       width: _timeColWidth,
       child: Column(
@@ -123,10 +119,8 @@ class WeekGridScreen extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 2, right: 6),
                 child: Align(
                   alignment: Alignment.topRight,
-                  child: Text(
-                    '${h.toString().padLeft(2, '0')}:00',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
+                  child: Text('${h.toString().padLeft(2, '0')}:00',
+                      style: Theme.of(context).textTheme.bodySmall),
                 ),
               ),
             ),
@@ -135,31 +129,26 @@ class WeekGridScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDayColumn(
-    BuildContext context,
-    ScheduleStore store,
-    int day,
-    double colWidth,
-    int startHour,
-    double gridHeight,
-  ) {
-    final dayEvents = store.eventsForDay(day);
+  Widget _dayColumn(BuildContext context, ScheduleStore store, int day,
+      double colWidth, int startHour, double gridHeight) {
+    final items = store.weeklyItemsForDay(day);
     final dividerColor = Theme.of(context).dividerColor.withOpacity(0.25);
+    final rows = (gridHeight / _hourHeight).ceil();
 
     return Container(
       width: colWidth,
       height: gridHeight,
       decoration: BoxDecoration(
         border: Border(
-          left: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.4)),
+          left: BorderSide(
+              color: Theme.of(context).dividerColor.withOpacity(0.4)),
         ),
       ),
       child: Stack(
         children: [
-          // Hour gridlines.
           Column(
             children: [
-              for (int i = 0; i * 60 < gridHeight / _hourHeight * 60; i++)
+              for (int i = 0; i < rows; i++)
                 Container(
                   height: _hourHeight,
                   decoration: BoxDecoration(
@@ -168,24 +157,21 @@ class WeekGridScreen extends StatelessWidget {
                 ),
             ],
           ),
-          // Event blocks.
-          for (final event in dayEvents)
-            _buildEventBlock(context, event, startHour, colWidth),
+          for (final item in items)
+            _block(context, store, item, startHour, colWidth),
         ],
       ),
     );
   }
 
-  Widget _buildEventBlock(
-    BuildContext context,
-    ScheduleEvent event,
-    int startHour,
-    double colWidth,
-  ) {
-    final top = (event.start.inMinutes - startHour * 60) / 60 * _hourHeight;
+  Widget _block(BuildContext context, ScheduleStore store, ScheduleItem item,
+      int startHour, double colWidth) {
+    final top = (item.start.inMinutes - startHour * 60) / 60 * _hourHeight;
     final height =
-        (event.durationMinutes / 60 * _hourHeight).clamp(24.0, double.infinity);
-    final fg = contrastOn(event.color);
+        (item.durationMinutes / 60 * _hourHeight).clamp(26.0, double.infinity);
+    final fg = contrastOn(item.color);
+    final hasHw = item.type == ItemType.lab &&
+        store.activeHomeworksForLab(item.id).isNotEmpty;
 
     return Positioned(
       top: top,
@@ -193,15 +179,12 @@ class WeekGridScreen extends StatelessWidget {
       width: colWidth - 4,
       height: height - 2,
       child: Material(
-        color: event.color,
+        color: item.color,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => EventDetailsScreen(eventId: event.id),
-            ),
-          ),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => ItemDetailsScreen(itemId: item.id))),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
             child: Column(
@@ -209,35 +192,25 @@ class WeekGridScreen extends StatelessWidget {
               children: [
                 Row(
                   children: [
+                    Icon(item.type.icon, size: 12, color: fg),
+                    const SizedBox(width: 3),
                     Expanded(
-                      child: Text(
-                        event.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: fg,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                      ),
+                      child: Text(item.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: fg,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12)),
                     ),
-                    if (event.notificationsEnabled)
-                      Icon(Icons.notifications_active,
-                          size: 12, color: fg),
+                    if (hasHw) Icon(Icons.assignment_late, size: 12, color: fg),
+                    if (item.notificationsEnabled)
+                      Icon(Icons.notifications_active, size: 11, color: fg),
                   ],
                 ),
-                if (height > 40)
-                  Text(
-                    event.start.format(),
-                    style: TextStyle(color: fg.withOpacity(0.9), fontSize: 10),
-                  ),
-                if (height > 58 && event.location.isNotEmpty)
-                  Text(
-                    event.location,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: fg.withOpacity(0.9), fontSize: 10),
-                  ),
+                if (height > 42)
+                  Text(item.start.format(),
+                      style: TextStyle(color: fg.withOpacity(0.9), fontSize: 10)),
               ],
             ),
           ),
