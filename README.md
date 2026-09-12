@@ -45,6 +45,43 @@ lib/
 - **Flutter 3.19+** (Dart 3.3+). Works with current stable Flutter.
 - Android Studio / Xcode as usual for device deployment.
 
+## 📥 Downloading the app (no computer needed)
+
+This repo builds the app automatically in the cloud with GitHub Actions and
+publishes a downloadable Android file on the **Releases** page.
+
+### Android — download & install (like an .exe)
+
+1. Go to the repository's **[Releases](../../releases)** page.
+2. Under the latest release, download **`app-release.apk`**.
+3. Open the file on your Android phone.
+4. When prompted, allow **"install from unknown sources"** (it's your own app).
+5. Tap **Install**. Done.
+
+> To publish a new downloadable version, push a version tag:
+> ```bash
+> git tag v1.0.0
+> git push origin v1.0.0
+> ```
+> A few minutes later the APK appears on the Releases page. (You can also
+> trigger a build manually from the **Actions** tab.)
+
+### iPhone / iOS — important
+
+Unlike Android, **Apple does not allow installing iPhone apps from a downloaded
+file**. There is no `.apk`/`.exe` equivalent you can just tap. iOS apps can only
+be installed through one of:
+
+- the **App Store** (requires an Apple Developer account, $99/year, + review),
+- **TestFlight** (Apple's beta system, also needs the paid account), or
+- **Xcode on a Mac** (plug in your own iPhone; free account works but the app
+  expires after 7 days).
+
+This is Apple's platform rule — no tool changes it. The code here is fully
+iOS-ready: the CI builds it for iPhone to prove it compiles, so the moment you
+have an Apple Developer account you can ship it to TestFlight or the App Store
+without code changes. See **"Porting to iPhone later"** below.
+
 ## How to run (first time)
 
 This repo contains the app source (`lib/`), the `pubspec.yaml`, and a customized

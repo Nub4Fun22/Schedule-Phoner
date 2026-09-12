@@ -1,0 +1,94 @@
+name: Build & Release
+
+# Builds the app whenever you push a version tag like "v1.0.0", and publishes
+# the Android APK as a downloadable GitHub Release.
+#
+# HOW TO TRIGGER A RELEASE:
+#   git tag v1.0.0
+#   git push origin v1.0.0
+# ...then find the downloadable APK on the repo's "Releases" page.
+#
+# You can also run it manually from the Actions tab (workflow_dispatch).
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# Allow the workflow to create a Release and upload files to it.
+permissions:
+  contents: write
+
+jobs:
+  # ----------------------------------------------------------------------
+  # ANDROID: produces an installable .apk
+  # ----------------------------------------------------------------------
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Generate platform files
+        run: flutter create . --project-name school_schedule --platforms=android
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload APK as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: schedule-phoner-android-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Attach APK to the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/app/outputs/flutter-apk/app-release.apk
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+
+  # ----------------------------------------------------------------------
+  # iOS: builds an UNSIGNED app to verify it compiles for iPhone.
+  # NOTE: This cannot produce a file iPhone users can download & install.
+  # Apple only allows installs via the App Store / TestFlight / Xcode,
+  # all of which require a paid Apple Developer account ($99/year).
+  # This job exists to confirm the iOS build is healthy and ready.
+  # ----------------------------------------------------------------------
+  build-ios:
+    name: Build iOS (unsigned, verification only)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Generate platform files
+        run: flutter create . --project-name school_schedule --platforms=ios
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build iOS (no code signing)
+        run: flutter build ios --release --no-codesign
