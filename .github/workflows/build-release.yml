@@ -75,6 +75,28 @@ jobs:
             grep -nE "compileSdk|targetSdk" "$f" || true
           done
 
+      - name: Pin androidx.work to an AGP-8.3-compatible version
+        # home_widget transitively pulls androidx.work 2.11.x, which demands
+        # AGP 8.6+ (newer than Flutter 3.24.5 ships). Force work back to 2.9.0,
+        # which is compatible with the bundled AGP and compileSdk 35.
+        run: |
+          set -e
+          f=android/app/build.gradle
+          if [ -f "$f" ]; then
+            {
+              printf '\n'
+              printf '// Injected by CI: keep androidx.work compatible with the bundled AGP.\n'
+              printf 'configurations.all {\n'
+              printf '    resolutionStrategy {\n'
+              printf "        force 'androidx.work:work-runtime:2.9.0'\n"
+              printf "        force 'androidx.work:work-runtime-ktx:2.9.0'\n"
+              printf '    }\n'
+              printf '}\n'
+            } >> "$f"
+            echo "Appended androidx.work resolutionStrategy to $f"
+            tail -12 "$f"
+          fi
+
       - name: Bump Kotlin Gradle plugin to 2.1.0
         # home_widget's precompiled deps use Kotlin metadata 2.1.0, but the
         # Flutter-generated project pins an older Kotlin compiler (1.8.x) that
