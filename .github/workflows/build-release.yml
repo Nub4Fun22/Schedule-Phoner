@@ -45,6 +45,14 @@ jobs:
       - name: Generate platform files
         run: flutter create . --project-name school_schedule --platforms=android
 
+      - name: Align JVM targets for all Gradle subprojects
+        # Some plugins (e.g. flutter_timezone) compile Java and Kotlin with
+        # different JVM targets, which newer Gradle rejects with
+        # "Inconsistent JVM-target compatibility". Force every subproject to
+        # JVM 17 for both Java and Kotlin. Uses a committed patch script so we
+        # avoid fragile inline heredocs and support Groovy or Kotlin-DSL files.
+        run: bash ci/align_jvm_targets.sh
+
       - name: Get dependencies
         run: flutter pub get
 
