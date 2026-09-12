@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/schedule_item.dart';
 import '../state/schedule_store.dart';
+import '../state/settings_store.dart';
 import '../widgets/color_utils.dart';
 import 'item_details_screen.dart';
 
@@ -20,7 +21,8 @@ class WeekGridScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = context.watch<ScheduleStore>();
-    final days = Weekday.schoolWeek;
+    final showWeekend = context.watch<SettingsStore>().showWeekendInGrid;
+    final days = showWeekend ? Weekday.fullWeek : Weekday.schoolWeek;
 
     // Always show a full standard day (7:00–22:00) so the grid has all its
     // hour rows even when the schedule is empty. If any weekly item falls

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'screens/home_screen.dart';
 import 'services/notification_service.dart';
 import 'state/schedule_store.dart';
+import 'state/settings_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,15 +20,24 @@ class SchoolScheduleApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<ScheduleStore>(
-      create: (_) => ScheduleStore()..load(),
-      child: MaterialApp(
-        title: 'School Schedule',
-        debugShowCheckedModeBanner: false,
-        theme: _buildTheme(Brightness.light),
-        darkTheme: _buildTheme(Brightness.dark),
-        themeMode: ThemeMode.system,
-        home: const HomeScreen(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<SettingsStore>(
+          create: (_) => SettingsStore()..load(),
+        ),
+        ChangeNotifierProvider<ScheduleStore>(
+          create: (_) => ScheduleStore()..load(),
+        ),
+      ],
+      child: Consumer<SettingsStore>(
+        builder: (context, settings, _) => MaterialApp(
+          title: 'School Schedule',
+          debugShowCheckedModeBanner: false,
+          theme: _buildTheme(Brightness.light),
+          darkTheme: _buildTheme(Brightness.dark),
+          themeMode: settings.themeMode,
+          home: const HomeScreen(),
+        ),
       ),
     );
   }

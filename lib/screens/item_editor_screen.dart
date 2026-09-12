@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/schedule_item.dart';
 import '../state/schedule_store.dart';
+import '../state/settings_store.dart';
 import '../widgets/color_utils.dart';
 
 /// Result returned when an item is saved, so callers can show confirmation.
@@ -58,6 +59,22 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
     _reminderMinutes = e?.reminderMinutesBefore ?? 10;
     _oneTime = e?.oneTime ?? _defaultOneTimeFor(_type);
     _applyTypeConstraints();
+  }
+
+  bool _appliedDefaultReminder = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // For NEW items, seed the reminder lead time from the user's default
+    // (once). Editing keeps the item's own value.
+    if (!_isEditing && !_appliedDefaultReminder) {
+      _appliedDefaultReminder = true;
+      final def = context.read<SettingsStore>().defaultReminderMinutes;
+      if (_leadOptions.contains(def)) {
+        setState(() => _reminderMinutes = def);
+      }
+    }
   }
 
   bool _defaultOneTimeFor(ItemType t) {

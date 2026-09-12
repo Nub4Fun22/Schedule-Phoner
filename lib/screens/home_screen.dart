@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../services/notification_service.dart';
 import '../state/schedule_store.dart';
+import '../state/settings_store.dart';
 import 'day_list_screen.dart';
 import 'item_editor_screen.dart';
 import 'priority_screen.dart';
+import 'settings_screen.dart';
 import 'week_grid_screen.dart';
 import 'whats_next_screen.dart';
 
@@ -22,11 +23,31 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
+  bool _syncedPrefs = false;
 
   /// Key to the Day view so we can reset it to "today" when its tab is opened.
   final GlobalKey<DayListScreenState> _dayKey = GlobalKey<DayListScreenState>();
 
   static const _titles = ['Weekly grid', 'By day', "What's next", 'Priority'];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Once settings have loaded from disk, push the notification sound/vibrate
+    // preferences into the schedule store so cold-start rescheduling uses the
+    // right channel set. Runs once.
+    final settings = context.watch<SettingsStore>();
+    if (settings.isLoaded && !_syncedPrefs) {
+      _syncedPrefs = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.read<ScheduleStore>().applyNotificationPreferences(
+              sound: settings.notificationSound,
+              vibrate: settings.vibrate,
+            );
+      });
+    }
+  }
 
   void _onTabSelected(int i) {
     setState(() => _tab = i);
@@ -66,11 +87,11 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Text(_titles[_tab]),
         actions: [
           IconButton(
-            tooltip: 'Notifications & settings',
-            icon: Icon(store.anyNotificationsEnabled
-                ? Icons.notifications_active
-                : Icons.notifications_none),
-            onPressed: () => _openSettings(context, store),
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
           ),
         ],
       ),
@@ -117,77 +138,5 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
-  }
-
-  Future<void> _openSettings(BuildContext context, ScheduleStore store) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => Consumer<ScheduleStore>(
-        builder: (ctx, store, _) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                child: Row(
-                  children: [
-                    Text('Notifications',
-                        style: Theme.of(ctx).textTheme.titleLarge),
-                  ],
-                ),
-              ),
-              SwitchListTile(
-                secondary: const Icon(Icons.notifications_active),
-                title: const Text('Reminders for all items'),
-                subtitle:
-                    const Text('Turn silent reminders on/off for everything'),
-                value: store.allNotificationsEnabled,
-                onChanged: (val) async {
-                  if (val) {
-                    await NotificationService.instance.requestPermissions();
-                  }
-                  await store.setAllNotifications(val);
-                },
-              ),
-              const Divider(),
-              ListTile(
-                leading: const Icon(Icons.dataset_outlined),
-                title: const Text('Load sample data (demo)'),
-                subtitle: const Text(
-                    'Fills the app with example items of each type. '
-                    'Replaces your current items.'),
-                onTap: () async {
-                  Navigator.of(ctx).pop();
-                  await _confirmSample(context, store);
-                },
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _confirmSample(BuildContext context, ScheduleStore store) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Load sample data?'),
-        content: const Text(
-            'This replaces your current items with demo examples. '
-            'This cannot be undone.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Load sample')),
-        ],
-      ),
-    );
-    if (confirmed == true) await store.loadSample();
   }
 }
