@@ -22,18 +22,22 @@ class WeekGridScreen extends StatelessWidget {
     final store = context.watch<ScheduleStore>();
     final days = Weekday.schoolWeek;
 
-    // Visible time range across all weekly items (fallback 8:00–18:00).
+    // Always show a full standard day (7:00–22:00) so the grid has all its
+    // hour rows even when the schedule is empty. If any weekly item falls
+    // outside that window, expand the range to include it.
+    const int defaultStartHour = 7;
+    const int defaultEndHour = 22;
     final weekly = store.items.where((e) => !e.oneTime).toList();
-    int minMinutes = 8 * 60;
-    int maxMinutes = 18 * 60;
+    int startHour = defaultStartHour;
+    int endHour = defaultEndHour;
     if (weekly.isNotEmpty) {
-      minMinutes =
+      final minMinutes =
           weekly.map((e) => e.start.inMinutes).reduce((a, b) => a < b ? a : b);
-      maxMinutes =
+      final maxMinutes =
           weekly.map((e) => e.end.inMinutes).reduce((a, b) => a > b ? a : b);
+      startHour = (minMinutes ~/ 60).clamp(0, defaultStartHour);
+      endHour = ((maxMinutes + 59) ~/ 60).clamp(defaultEndHour, 24);
     }
-    final startHour = minMinutes ~/ 60;
-    final endHour = (maxMinutes + 59) ~/ 60;
     final totalHours = (endHour - startHour).clamp(1, 24);
     final gridHeight = totalHours * _hourHeight;
 

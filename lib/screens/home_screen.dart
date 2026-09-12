@@ -23,7 +23,39 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
 
+  /// Key to the Day view so we can reset it to "today" when its tab is opened.
+  final GlobalKey<DayListScreenState> _dayKey = GlobalKey<DayListScreenState>();
+
   static const _titles = ['Weekly grid', 'By day', "What's next", 'Priority'];
+
+  void _onTabSelected(int i) {
+    setState(() => _tab = i);
+    // Whenever the "Day" tab (index 1) is opened, jump to the current weekday.
+    if (i == 1) {
+      _dayKey.currentState?.showToday();
+    }
+  }
+
+  Future<void> _openEditor() async {
+    final result = await Navigator.of(context).push<ItemSaveResult>(
+      MaterialPageRoute(builder: (_) => const ItemEditorScreen()),
+    );
+    if (result != null && mounted) {
+      final name = result.title.trim().isEmpty ? 'Item' : result.title.trim();
+      final msg = result.isNew
+          ? '"$name" has been added successfully'
+          : '"$name" has been updated';
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,23 +78,21 @@ class _HomeScreenState extends State<HomeScreen> {
           ? const Center(child: CircularProgressIndicator())
           : IndexedStack(
               index: _tab,
-              children: const [
-                WeekGridScreen(),
-                DayListScreen(),
-                WhatsNextScreen(),
-                PriorityScreen(),
+              children: [
+                const WeekGridScreen(),
+                DayListScreen(key: _dayKey),
+                const WhatsNextScreen(),
+                const PriorityScreen(),
               ],
             ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const ItemEditorScreen()),
-        ),
+        onPressed: _openEditor,
         icon: const Icon(Icons.add),
         label: const Text('Add'),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
+        onDestinationSelected: _onTabSelected,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.grid_view_outlined),

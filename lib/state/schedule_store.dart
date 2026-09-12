@@ -114,13 +114,19 @@ class ScheduleStore extends ChangeNotifier {
   /// Test/Exam (per spec, no homework). Presentation/Project excluded too,
   /// matching the requested set exactly.
   UpcomingOccurrence? get nextForWidget {
-    final list = upcoming(types: {
+    final list = widgetUpcoming(limit: 1);
+    return list.isEmpty ? null : list.first;
+  }
+
+  /// Upcoming Course/Lab/Test/Exam occurrences for the home-screen widget
+  /// (the "next up" row shows the second entry).
+  List<UpcomingOccurrence> widgetUpcoming({int limit = 2}) {
+    return upcoming(types: {
       ItemType.course,
       ItemType.lab,
       ItemType.test,
       ItemType.exam,
-    }, limit: 1);
-    return list.isEmpty ? null : list.first;
+    }, limit: limit);
   }
 
   // ---------------------------------------------------------------------------
@@ -218,11 +224,15 @@ class ScheduleStore extends ChangeNotifier {
 
   Future<void> _rescheduleAll() async {
     await _notifications.rescheduleAll(items: _items, homeworks: _homeworks);
-    // Keep the home-screen widget in sync with the next item.
-    final next = nextForWidget;
+    // Keep the home-screen widget in sync with the next two items.
+    final upcomingForWidget = widgetUpcoming(limit: 2);
     await WidgetService.instance.updateNextItem(
-      item: next?.item,
-      occurrenceWhen: next?.when,
+      item: upcomingForWidget.isNotEmpty ? upcomingForWidget[0].item : null,
+      occurrenceWhen:
+          upcomingForWidget.isNotEmpty ? upcomingForWidget[0].when : null,
+      following: upcomingForWidget.length > 1 ? upcomingForWidget[1].item : null,
+      followingWhen:
+          upcomingForWidget.length > 1 ? upcomingForWidget[1].when : null,
     );
   }
 
