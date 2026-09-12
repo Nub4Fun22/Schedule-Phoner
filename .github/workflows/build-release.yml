@@ -1,29 +1,29 @@
-name: Build & Release
+name: Build & Release Android APK
 
-# Builds the app whenever you push a version tag like "v1.0.0", and publishes
-# the Android APK as a downloadable GitHub Release.
+# WHAT THIS DOES
+# --------------
+# * On every push to `main`  -> builds the APK and updates a "latest" release
+#                               so there is always an up-to-date downloadable
+#                               APK reflecting your newest fixes/features.
+# * On every version tag v*  -> builds the APK and publishes a versioned
+#                               release (e.g. v1.2.0) that stays around.
+# * Manual run (Actions tab) -> builds on demand.
 #
-# HOW TO TRIGGER A RELEASE:
-#   git tag v1.0.0
-#   git push origin v1.0.0
-# ...then find the downloadable APK on the repo's "Releases" page.
-#
-# You can also run it manually from the Actions tab (workflow_dispatch).
+# The downloadable APK always appears on the repo's "Releases" page.
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
 
-# Allow the workflow to create a Release and upload files to it.
+# Needed so the workflow can create/update Releases and upload the APK.
 permissions:
   contents: write
 
 jobs:
-  # ----------------------------------------------------------------------
-  # ANDROID: produces an installable .apk
-  # ----------------------------------------------------------------------
   build-android:
     name: Build Android APK
     runs-on: ubuntu-latest
@@ -31,7 +31,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -41,17 +41,13 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          # Pinned to a stable Flutter that bundles Android Gradle Plugin 8.x.
+          # (The very latest Flutter pulls AGP 9, whose "new DSL" breaks some
+          # plugins like flutter_local_notifications/flutter_timezone.)
+          flutter-version: '3.24.5'
 
-      - name: Generate platform files
+      - name: Generate Android platform files
         run: flutter create . --project-name school_schedule --platforms=android
-
-      - name: Align JVM targets for all Gradle subprojects
-        # Some plugins (e.g. flutter_timezone) compile Java and Kotlin with
-        # different JVM targets, which newer Gradle rejects with
-        # "Inconsistent JVM-target compatibility". Force every subproject to
-        # JVM 17 for both Java and Kotlin. Uses a committed patch script so we
-        # avoid fragile inline heredocs and support Groovy or Kotlin-DSL files.
-        run: bash ci/align_jvm_targets.sh
 
       - name: Get dependencies
         run: flutter pub get
@@ -59,44 +55,37 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release
 
-      - name: Upload APK as a workflow artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: schedule-phoner-android-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+      - name: Rename APK
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk dist/schedule-phoner.apk
+          ls -lh dist
 
-      - name: Attach APK to the GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+      # Always keep a rolling "latest" release updated from main pushes.
+      - name: Publish/refresh the "latest" release
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          files: build/app/outputs/flutter-apk/app-release.apk
+          tag_name: latest
+          name: Latest build
+          body: |
+            Automatically built from the latest code on `main`.
+            Download **schedule-phoner.apk** below and open it on your Android
+            phone to install (allow "install from unknown sources" if asked).
+          files: dist/schedule-phoner.apk
+          fail_on_unmatched_files: true
+
+      # Versioned, permanent releases when you push a tag like v1.2.0.
+      - name: Publish versioned release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/schedule-phoner.apk
           fail_on_unmatched_files: true
           generate_release_notes: true
 
-  # ----------------------------------------------------------------------
-  # iOS: builds an UNSIGNED app to verify it compiles for iPhone.
-  # NOTE: This cannot produce a file iPhone users can download & install.
-  # Apple only allows installs via the App Store / TestFlight / Xcode,
-  # all of which require a paid Apple Developer account ($99/year).
-  # This job exists to confirm the iOS build is healthy and ready.
-  # ----------------------------------------------------------------------
-  build-ios:
-    name: Build iOS (unsigned, verification only)
-    runs-on: macos-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - name: Upload APK as a workflow artifact
+        uses: actions/upload-artifact@v4
         with:
-          channel: 'stable'
-
-      - name: Generate platform files
-        run: flutter create . --project-name school_schedule --platforms=ios
-
-      - name: Get dependencies
-        run: flutter pub get
-
-      - name: Build iOS (no code signing)
-        run: flutter build ios --release --no-codesign
+          name: schedule-phoner-apk
+          path: dist/schedule-phoner.apk
