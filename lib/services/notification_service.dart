@@ -25,8 +25,13 @@ class NotificationService {
 
   bool _initialized = false;
 
-  // Four silent channels of increasing importance, chosen by item priority.
-  // (Android bakes sound/importance into the channel at creation time.)
+  /// Whether the current run should play a sound. Android bakes sound into the
+  /// channel at creation time, so we keep two parallel channel sets (silent and
+  /// sound) and pick the right one per notification based on this flag.
+  bool _soundEnabled = false;
+  bool _vibrateEnabled = true;
+
+  // --- Silent channels (no sound), increasing importance by priority --------
   static const AndroidNotificationChannel _chLow = AndroidNotificationChannel(
     'sp_silent_low',
     'Courses (silent)',
@@ -55,6 +60,36 @@ class NotificationService {
     description: 'Silent reminders for exams',
     importance: Importance.max,
     playSound: false,
+  );
+
+  // --- Sound channels (default system sound), same importance ladder --------
+  static const AndroidNotificationChannel _chLowSound =
+      AndroidNotificationChannel(
+    'sp_sound_low',
+    'Courses',
+    description: 'Reminders for courses',
+    importance: Importance.low,
+  );
+  static const AndroidNotificationChannel _chDefaultSound =
+      AndroidNotificationChannel(
+    'sp_sound_default',
+    'Labs & homework',
+    description: 'Reminders for labs, homework and projects',
+    importance: Importance.defaultImportance,
+  );
+  static const AndroidNotificationChannel _chHighSound =
+      AndroidNotificationChannel(
+    'sp_sound_high',
+    'Tests & presentations',
+    description: 'Reminders for tests and presentations',
+    importance: Importance.high,
+  );
+  static const AndroidNotificationChannel _chMaxSound =
+      AndroidNotificationChannel(
+    'sp_sound_max',
+    'Exams',
+    description: 'Reminders for exams',
+    importance: Importance.max,
   );
 
   Future<void> init() async {
@@ -88,7 +123,10 @@ class NotificationService {
 
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
-    for (final ch in [_chLow, _chDefault, _chHigh, _chMax]) {
+    for (final ch in [
+      _chLow, _chDefault, _chHigh, _chMax, // silent set
+      _chLowSound, _chDefaultSound, _chHighSound, _chMaxSound, // sound set
+    ]) {
       await android?.createNotificationChannel(ch);
     }
 
@@ -111,6 +149,12 @@ class NotificationService {
   // --- channel/details selection by priority -------------------------------
 
   AndroidNotificationChannel _channelForPriority(int priority) {
+    if (_soundEnabled) {
+      if (priority >= ItemType.exam.priority) return _chMaxSound;
+      if (priority >= ItemType.test.priority) return _chHighSound;
+      if (priority >= ItemType.lab.priority) return _chDefaultSound;
+      return _chLowSound;
+    }
     if (priority >= ItemType.exam.priority) return _chMax;
     if (priority >= ItemType.test.priority) return _chHigh;
     if (priority >= ItemType.lab.priority) return _chDefault;
@@ -125,9 +169,10 @@ class NotificationService {
       channelDescription: ch.description,
       importance: ch.importance,
       priority: _androidPriority(priority),
-      playSound: false, // silent
+      playSound: _soundEnabled,
+      enableVibration: _vibrateEnabled,
     );
-    const iosDetails = DarwinNotificationDetails(presentSound: false);
+    final iosDetails = DarwinNotificationDetails(presentSound: _soundEnabled);
     return NotificationDetails(android: androidDetails, iOS: iosDetails);
   }
 
@@ -173,11 +218,17 @@ class NotificationService {
   // --- public API -----------------------------------------------------------
 
   /// Cancels everything and reschedules all enabled items + active homeworks.
+  /// [sound]/[vibrate] come from user settings and pick the sound vs silent
+  /// channel set for every scheduled notification.
   Future<void> rescheduleAll({
     required List<ScheduleItem> items,
     required List<Homework> homeworks,
+    bool sound = false,
+    bool vibrate = true,
   }) async {
     await init();
+    _soundEnabled = sound;
+    _vibrateEnabled = vibrate;
     await _plugin.cancelAll();
 
     for (final item in items) {

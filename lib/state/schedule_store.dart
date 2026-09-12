@@ -33,10 +33,27 @@ class ScheduleStore extends ChangeNotifier {
   List<Homework> _homeworks = [];
   bool _loading = true;
 
+  // Notification sound/vibration preferences, mirrored from SettingsStore.
+  // The schedule store owns the (re)scheduling, so it needs these to pick the
+  // right notification channel set.
+  bool _notificationSound = false;
+  bool _notificationVibrate = true;
+
   ScheduleStore({NotificationService? notifications})
       : _notifications = notifications ?? NotificationService.instance;
 
   bool get isLoading => _loading;
+
+  /// Sync notification sound/vibrate preferences and reschedule so the change
+  /// takes effect immediately. Called by the UI when settings change.
+  Future<void> applyNotificationPreferences({
+    required bool sound,
+    required bool vibrate,
+  }) async {
+    _notificationSound = sound;
+    _notificationVibrate = vibrate;
+    await _rescheduleAll();
+  }
 
   // ---------------------------------------------------------------------------
   // Reads
@@ -223,7 +240,12 @@ class ScheduleStore extends ChangeNotifier {
   }
 
   Future<void> _rescheduleAll() async {
-    await _notifications.rescheduleAll(items: _items, homeworks: _homeworks);
+    await _notifications.rescheduleAll(
+      items: _items,
+      homeworks: _homeworks,
+      sound: _notificationSound,
+      vibrate: _notificationVibrate,
+    );
     // Keep the home-screen widget in sync with the next two items.
     final upcomingForWidget = widgetUpcoming(limit: 2);
     await WidgetService.instance.updateNextItem(
@@ -316,10 +338,40 @@ class ScheduleStore extends ChangeNotifier {
   // Demo data (optional)
   // ---------------------------------------------------------------------------
 
+  /// True if any demo item/homework is currently present.
+  bool get hasDemoData =>
+      _items.any((e) => e.id.startsWith(SampleSchedule.demoPrefix)) ||
+      _homeworks.any((h) => h.id.startsWith(SampleSchedule.demoPrefix));
+
+  /// Import the demo dataset. Demo items are ADDED alongside the user's own
+  /// items (their ids are demo-prefixed), so they can be removed later without
+  /// touching the user's data. Existing demo items are refreshed.
   Future<void> loadSample() async {
+    // Drop any previous demo data first so re-importing doesn't duplicate.
+    _items.removeWhere((e) => e.id.startsWith(SampleSchedule.demoPrefix));
+    _homeworks.removeWhere((h) => h.id.startsWith(SampleSchedule.demoPrefix));
+
     final sample = SampleSchedule.build();
-    _items = sample.items;
-    _homeworks = sample.homeworks;
+    _items.addAll(sample.items);
+    _homeworks.addAll(sample.homeworks);
+    await _persist();
+    notifyListeners();
+    await _rescheduleAll();
+  }
+
+  /// Remove only the demo data, leaving the user's own items untouched.
+  Future<void> deleteSample() async {
+    _items.removeWhere((e) => e.id.startsWith(SampleSchedule.demoPrefix));
+    _homeworks.removeWhere((h) => h.id.startsWith(SampleSchedule.demoPrefix));
+    await _persist();
+    notifyListeners();
+    await _rescheduleAll();
+  }
+
+  /// Wipe EVERYTHING — all items and homework. Settings are unaffected.
+  Future<void> deleteAll() async {
+    _items = [];
+    _homeworks = [];
     await _persist();
     notifyListeners();
     await _rescheduleAll();
