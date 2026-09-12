@@ -175,12 +175,47 @@ class NotificationService {
     );
   }
 
+  /// Schedule a test notification [seconds] from now, so the user can verify
+  /// that *scheduled* (not just instant) delivery works on their device.
+  Future<void> scheduleTestNotification({
+    required bool sound,
+    required bool vibrate,
+    int seconds = 10,
+  }) async {
+    await init();
+    _soundEnabled = sound;
+    _vibrateEnabled = vibrate;
+    final details = _detailsForPriority(ItemType.test.priority);
+    final when =
+        tz.TZDateTime.now(tz.local).add(Duration(seconds: seconds));
+    await _zonedScheduleWithFallback(
+      id: 0x5A5B,
+      title: 'Scheduled test',
+      body: 'This was scheduled ${seconds}s ago and fired on time.',
+      when: when,
+      details: details,
+    );
+  }
+
   /// Whether the app can post notifications (best-effort; true if unknown).
   Future<bool> areNotificationsEnabled() async {
     await init();
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
     return await android?.areNotificationsEnabled() ?? true;
+  }
+
+  /// Whether the app is allowed to schedule EXACT alarms (Android 12+).
+  /// Returns true when unknown/not applicable.
+  Future<bool> canScheduleExactAlarms() async {
+    await init();
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    try {
+      return await android?.canScheduleExactNotifications() ?? true;
+    } catch (_) {
+      return true;
+    }
   }
 
   // --- channel/details selection by priority -------------------------------

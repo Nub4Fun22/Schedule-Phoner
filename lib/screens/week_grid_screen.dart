@@ -25,18 +25,21 @@ class WeekGridScreen extends StatelessWidget {
     final days = showWeekend ? Weekday.fullWeek : Weekday.schoolWeek;
 
     // Always show a full standard day (7:00–22:00) so the grid has all its
-    // hour rows even when the schedule is empty. If any weekly item falls
-    // outside that window, expand the range to include it.
+    // hour rows even when the schedule is empty. If any displayed item falls
+    // outside that window, expand the range to include it. "Displayed" = the
+    // items each visible day column will actually render (weekly + this week's
+    // one-time items).
     const int defaultStartHour = 7;
     const int defaultEndHour = 22;
-    final weekly = store.items.where((e) => !e.oneTime).toList();
+    final displayed = [for (final d in days) ...store.gridItemsForDay(d)];
     int startHour = defaultStartHour;
     int endHour = defaultEndHour;
-    if (weekly.isNotEmpty) {
-      final minMinutes =
-          weekly.map((e) => e.start.inMinutes).reduce((a, b) => a < b ? a : b);
+    if (displayed.isNotEmpty) {
+      final minMinutes = displayed
+          .map((e) => e.start.inMinutes)
+          .reduce((a, b) => a < b ? a : b);
       final maxMinutes =
-          weekly.map((e) => e.end.inMinutes).reduce((a, b) => a > b ? a : b);
+          displayed.map((e) => e.end.inMinutes).reduce((a, b) => a > b ? a : b);
       startHour = (minMinutes ~/ 60).clamp(0, defaultStartHour);
       endHour = ((maxMinutes + 59) ~/ 60).clamp(defaultEndHour, 24);
     }
@@ -137,7 +140,7 @@ class WeekGridScreen extends StatelessWidget {
 
   Widget _dayColumn(BuildContext context, ScheduleStore store, int day,
       double colWidth, int startHour, double gridHeight) {
-    final items = store.weeklyItemsForDay(day);
+    final items = store.gridItemsForDay(day);
     final dividerColor = Theme.of(context).dividerColor.withOpacity(0.25);
     final rows = (gridHeight / _hourHeight).ceil();
 
