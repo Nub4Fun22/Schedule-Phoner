@@ -63,7 +63,9 @@ class DayListScreenState extends State<DayListScreen> {
   @override
   Widget build(BuildContext context) {
     final store = context.watch<ScheduleStore>();
-    final items = store.weeklyItemsForDay(_selectedDay);
+    // Include this week's one-time items (e.g. a one-time test on Saturday),
+    // matching the weekly grid.
+    final items = store.gridItemsForDay(_selectedDay);
 
     return Column(
       children: [
