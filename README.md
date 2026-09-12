@@ -52,19 +52,25 @@ publishes a downloadable Android file on the **Releases** page.
 
 ### Android — download & install (like an .exe)
 
-1. Go to the repository's **[Releases](../../releases)** page.
-2. Under the latest release, download **`app-release.apk`**.
-3. Open the file on your Android phone.
-4. When prompted, allow **"install from unknown sources"** (it's your own app).
-5. Tap **Install**. Done.
+**Direct download link:**
+👉 https://github.com/Nub4Fun22/Schedule-Phoner/releases/latest
 
-> To publish a new downloadable version, push a version tag:
+1. Open that link on your **Android phone**.
+2. Download **`schedule-phoner.apk`**.
+3. Tap the downloaded file.
+4. When prompted, allow **"install from unknown sources"** (it's your own app).
+5. Tap **Install**. Done. 🎉
+
+> The APK on the **latest** release is rebuilt **automatically every time the
+> code is updated** (any push to `main`), so it always has the newest fixes and
+> features. Just re-download and reinstall to update.
+>
+> Pushing a version tag also creates a permanent, versioned release:
 > ```bash
-> git tag v1.0.0
-> git push origin v1.0.0
+> git tag v1.1.0
+> git push origin v1.1.0
 > ```
-> A few minutes later the APK appears on the Releases page. (You can also
-> trigger a build manually from the **Actions** tab.)
+> You can also trigger a build manually from the repo's **Actions** tab.
 
 ### iPhone / iOS — important
 
