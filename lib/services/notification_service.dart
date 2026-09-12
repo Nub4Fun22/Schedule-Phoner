@@ -177,24 +177,31 @@ class NotificationService {
 
   /// Schedule a test notification [seconds] from now, so the user can verify
   /// that *scheduled* (not just instant) delivery works on their device.
-  Future<void> scheduleTestNotification({
+  /// Returns null on success, or an error message string on failure — so the
+  /// UI can SHOW the real error instead of the app crashing.
+  Future<String?> scheduleTestNotification({
     required bool sound,
     required bool vibrate,
     int seconds = 10,
   }) async {
-    await init();
-    _soundEnabled = sound;
-    _vibrateEnabled = vibrate;
-    final details = _detailsForPriority(ItemType.test.priority);
-    final when =
-        tz.TZDateTime.now(tz.local).add(Duration(seconds: seconds));
-    await _zonedScheduleWithFallback(
-      id: 0x5A5B,
-      title: 'Scheduled test',
-      body: 'This was scheduled ${seconds}s ago and fired on time.',
-      when: when,
-      details: details,
-    );
+    try {
+      await init();
+      _soundEnabled = sound;
+      _vibrateEnabled = vibrate;
+      final details = _detailsForPriority(ItemType.test.priority);
+      final when =
+          tz.TZDateTime.now(tz.local).add(Duration(seconds: seconds));
+      await _zonedScheduleWithFallback(
+        id: 0x5A5B,
+        title: 'Scheduled test',
+        body: 'This was scheduled ${seconds}s ago and fired on time.',
+        when: when,
+        details: details,
+      );
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
   }
 
   /// Whether the app can post notifications (best-effort; true if unknown).

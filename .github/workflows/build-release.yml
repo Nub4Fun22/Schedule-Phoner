@@ -114,6 +114,34 @@ jobs:
             grep -nE "kotlin" "$f" || true
           done
 
+      - name: Disable R8/minification for release
+        # flutter_local_notifications crashes in R8-shrunk release builds
+        # ("TypeToken must be created with a type argument") the moment a
+        # SCHEDULED notification is created — instant ones still work. The app
+        # is small and doesn't need shrinking, so the most robust fix is to
+        # turn minify + resource shrinking OFF for the release build type.
+        # We also ship proguard-rules.pro (via android_overlay) as a backup.
+        run: |
+          set -e
+          f=android/app/build.gradle
+          if [ -f "$f" ]; then
+            {
+              printf '\n'
+              printf '// Injected by CI: disable code shrinking so\n'
+              printf '// flutter_local_notifications works in release builds.\n'
+              printf 'android {\n'
+              printf '    buildTypes {\n'
+              printf '        release {\n'
+              printf '            minifyEnabled false\n'
+              printf '            shrinkResources false\n'
+              printf '        }\n'
+              printf '    }\n'
+              printf '}\n'
+            } >> "$f"
+            echo "Appended release minify=false to $f"
+            tail -14 "$f"
+          fi
+
       - name: Get dependencies
         run: flutter pub get
 

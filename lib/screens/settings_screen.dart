@@ -220,20 +220,36 @@ class SettingsScreen extends StatelessWidget {
       return;
     }
     final exact = await svc.canScheduleExactAlarms();
-    await svc.scheduleTestNotification(
+    final error = await svc.scheduleTestNotification(
       sound: settings.notificationSound,
       vibrate: settings.vibrate,
       seconds: 10,
     );
-    if (context.mounted) {
-      _snack(
-        context,
-        exact
-            ? 'Scheduled — it should pop in ~10 seconds'
-            : 'Scheduled (~10s). Exact alarms are OFF, so it may be delayed. '
-                'Enable "Alarms & reminders" for this app in Android settings.',
+    if (!context.mounted) return;
+    if (error != null) {
+      // Surface the real reason instead of crashing, so it can be diagnosed.
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(Icons.error_outline),
+          title: const Text('Could not schedule'),
+          content: SingleChildScrollView(child: Text(error)),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('OK')),
+          ],
+        ),
       );
+      return;
     }
+    _snack(
+      context,
+      exact
+          ? 'Scheduled — it should pop in ~10 seconds'
+          : 'Scheduled (~10s). Exact alarms are OFF, so it may be delayed. '
+              'Enable "Alarms & reminders" for this app in Android settings.',
+    );
   }
 
   void _showBlockedDialog(BuildContext context) {
