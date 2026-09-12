@@ -11,17 +11,27 @@ class DayListScreen extends StatefulWidget {
   const DayListScreen({super.key});
 
   @override
-  State<DayListScreen> createState() => _DayListScreenState();
+  State<DayListScreen> createState() => DayListScreenState();
 }
 
-class _DayListScreenState extends State<DayListScreen> {
+class DayListScreenState extends State<DayListScreen> {
   late int _selectedDay;
 
   @override
   void initState() {
     super.initState();
+    _selectedDay = _todayOrMonday();
+  }
+
+  int _todayOrMonday() {
     final today = DateTime.now().weekday;
-    _selectedDay = Weekday.fullWeek.contains(today) ? today : Weekday.monday;
+    return Weekday.fullWeek.contains(today) ? today : Weekday.monday;
+  }
+
+  /// Jump the view back to the current weekday. Called by the home shell each
+  /// time the "Day" tab is selected, so opening it always lands on today.
+  void showToday() {
+    setState(() => _selectedDay = _todayOrMonday());
   }
 
   @override

@@ -5,6 +5,13 @@ import '../models/schedule_item.dart';
 import '../state/schedule_store.dart';
 import '../widgets/color_utils.dart';
 
+/// Result returned when an item is saved, so callers can show confirmation.
+class ItemSaveResult {
+  final String title;
+  final bool isNew;
+  const ItemSaveResult({required this.title, required this.isNew});
+}
+
 /// Create or edit a schedule item. Pass [existing] to edit; null to create.
 class ItemEditorScreen extends StatefulWidget {
   final ScheduleItem? existing;
@@ -141,7 +148,13 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
     );
 
     await store.addOrUpdateItem(item);
-    if (mounted) Navigator.of(context).pop();
+    // Return a result so the caller can confirm the save (e.g. show a
+    // snackbar). isNew=false when editing an existing item.
+    if (mounted) {
+      Navigator.of(context).pop(
+        ItemSaveResult(title: item.title, isNew: !_isEditing),
+      );
+    }
   }
 
   void _snack(String msg) => ScaffoldMessenger.of(context)
