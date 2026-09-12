@@ -52,8 +52,12 @@ class _HomeScreenState extends State<HomeScreen> {
   void _onTabSelected(int i) {
     setState(() => _tab = i);
     // Whenever the "Day" tab (index 1) is opened, jump to the current weekday.
+    // Deferred to after the frame so the Day view's State is attached (the
+    // IndexedStack may build it lazily on first selection).
     if (i == 1) {
-      _dayKey.currentState?.showToday();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _dayKey.currentState?.showToday();
+      });
     }
   }
 

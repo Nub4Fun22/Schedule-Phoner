@@ -16,11 +16,20 @@ class DayListScreen extends StatefulWidget {
 
 class DayListScreenState extends State<DayListScreen> {
   late int _selectedDay;
+  final ScrollController _chipScroll = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _selectedDay = _todayOrMonday();
+    // After first layout, make sure today's chip is scrolled into view.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelected());
+  }
+
+  @override
+  void dispose() {
+    _chipScroll.dispose();
+    super.dispose();
   }
 
   int _todayOrMonday() {
@@ -32,6 +41,23 @@ class DayListScreenState extends State<DayListScreen> {
   /// time the "Day" tab is selected, so opening it always lands on today.
   void showToday() {
     setState(() => _selectedDay = _todayOrMonday());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelected());
+  }
+
+  /// Scroll the horizontal weekday chip row so the selected day is visible.
+  void _scrollToSelected() {
+    if (!_chipScroll.hasClients) return;
+    final index = Weekday.fullWeek.indexOf(_selectedDay);
+    if (index < 0) return;
+    // Approximate chip width (chip + spacing). Good enough to reveal the chip.
+    const double approxChipExtent = 64.0;
+    final target = (index * approxChipExtent)
+        .clamp(0.0, _chipScroll.position.maxScrollExtent);
+    _chipScroll.animateTo(
+      target,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
   }
 
   @override
@@ -61,6 +87,7 @@ class DayListScreenState extends State<DayListScreen> {
   Widget _daySelector(BuildContext context) {
     final today = DateTime.now().weekday;
     return SingleChildScrollView(
+      controller: _chipScroll,
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
