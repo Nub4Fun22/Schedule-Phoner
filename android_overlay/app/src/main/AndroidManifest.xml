@@ -3,6 +3,10 @@
     <!-- Notification permissions (Android 13+ requires POST_NOTIFICATIONS at runtime) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- Exact alarms so timed reminders fire on time. SCHEDULE_EXACT_ALARM is
+         requested at runtime; the app falls back to inexact if it's denied. We
+         intentionally do NOT declare USE_EXACT_ALARM (that's reserved for true
+         alarm-clock apps and is restricted on Google Play). -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
 

@@ -347,16 +347,33 @@ class NotificationService {
               UILocalNotificationDateInterpretation.absoluteTime,
           matchDateTimeComponents: matchComponents,
         );
+
+    // IMPORTANT: on Android 14+, calling exact scheduling when the
+    // SCHEDULE_EXACT_ALARM permission is NOT granted throws a native
+    // SecurityException that can crash the app (a Dart try/catch can't always
+    // catch a native crash). So decide the mode UP FRONT by asking the OS
+    // whether exact alarms are allowed, and only use exact when they are.
+    AndroidScheduleMode mode;
     try {
-      await schedule(AndroidScheduleMode.exactAllowWhileIdle);
+      final exactAllowed = await canScheduleExactAlarms();
+      mode = exactAllowed
+          ? AndroidScheduleMode.exactAllowWhileIdle
+          : AndroidScheduleMode.inexactAllowWhileIdle;
+    } catch (_) {
+      mode = AndroidScheduleMode.inexactAllowWhileIdle;
+    }
+
+    try {
+      await schedule(mode);
     } catch (e) {
-      // Most common cause: SCHEDULE_EXACT_ALARM not granted. Retry inexact so
-      // the reminder still fires (just not to-the-minute precise).
-      debugPrint('Exact schedule failed ($id), retrying inexact: $e');
-      try {
-        await schedule(AndroidScheduleMode.inexactAllowWhileIdle);
-      } catch (e2) {
-        debugPrint('Inexact schedule also failed ($id): $e2');
+      debugPrint('Schedule failed ($id) in $mode: $e');
+      // Last-ditch: if we somehow tried exact and it failed, retry inexact.
+      if (mode == AndroidScheduleMode.exactAllowWhileIdle) {
+        try {
+          await schedule(AndroidScheduleMode.inexactAllowWhileIdle);
+        } catch (e2) {
+          debugPrint('Inexact retry also failed ($id): $e2');
+        }
       }
     }
   }
