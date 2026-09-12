@@ -30,9 +30,14 @@ class NotificationService {
     // Timezone setup — required for zonedSchedule.
     tzdata.initializeTimeZones();
     try {
-      // flutter_timezone (1.x) returns the IANA tz name as a String,
-      // e.g. "Europe/Bucharest".
-      final String localName = await FlutterTimezone.getLocalTimezone();
+      // flutter_timezone changed its return type across major versions:
+      //   1.x  -> String (the IANA name, e.g. "Europe/Bucharest")
+      //   3.x  -> TimezoneInfo (with an `identifier` field)
+      // Read it as dynamic and support both shapes so we don't depend on a
+      // specific version's type at compile time.
+      final dynamic result = await FlutterTimezone.getLocalTimezone();
+      final String localName =
+          result is String ? result : (result.identifier as String);
       tz.setLocalLocation(tz.getLocation(localName));
     } catch (e) {
       // Fallback to UTC if the platform timezone can't be resolved.
