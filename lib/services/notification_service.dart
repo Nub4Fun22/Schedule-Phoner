@@ -143,7 +143,44 @@ class NotificationService {
         ?.requestPermissions(alert: true, badge: true, sound: false);
     final androidGranted =
         await android?.requestNotificationsPermission() ?? true;
+    // Android 13+ also gates *exact* alarms behind a separate permission.
+    // Request it so scheduled reminders fire at the right time; if it's not
+    // granted we fall back to inexact scheduling (see _scheduleItem).
+    try {
+      await android?.requestExactAlarmsPermission();
+    } catch (e) {
+      debugPrint('requestExactAlarmsPermission not available: $e');
+    }
     return androidGranted || (iosGranted ?? false);
+  }
+
+  /// Fire an immediate test notification so the user can confirm reminders
+  /// work on their device. Honors the current sound/vibrate preferences.
+  Future<void> showTestNotification({
+    required bool sound,
+    required bool vibrate,
+  }) async {
+    await init();
+    _soundEnabled = sound;
+    _vibrateEnabled = vibrate;
+    // Use the "test" priority (default channel) so it's clearly visible.
+    final details = _detailsForPriority(ItemType.test.priority);
+    await _plugin.show(
+      0x5A5A,
+      'Test notification',
+      sound
+          ? 'Notifications are working (with sound).'
+          : 'Notifications are working (silent).',
+      details,
+    );
+  }
+
+  /// Whether the app can post notifications (best-effort; true if unknown).
+  Future<bool> areNotificationsEnabled() async {
+    await init();
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    return await android?.areNotificationsEnabled() ?? true;
   }
 
   // --- channel/details selection by priority -------------------------------
@@ -254,46 +291,71 @@ class NotificationService {
     }
   }
 
+  /// Schedules a notification, trying exact mode first and transparently
+  /// falling back to inexact if exact alarms aren't permitted (Android 13+).
+  Future<void> _zonedScheduleWithFallback({
+    required int id,
+    required String title,
+    required String body,
+    required tz.TZDateTime when,
+    required NotificationDetails details,
+    DateTimeComponents? matchComponents,
+  }) async {
+    Future<void> schedule(AndroidScheduleMode mode) => _plugin.zonedSchedule(
+          id,
+          title,
+          body,
+          when,
+          details,
+          androidScheduleMode: mode,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          matchDateTimeComponents: matchComponents,
+        );
+    try {
+      await schedule(AndroidScheduleMode.exactAllowWhileIdle);
+    } catch (e) {
+      // Most common cause: SCHEDULE_EXACT_ALARM not granted. Retry inexact so
+      // the reminder still fires (just not to-the-minute precise).
+      debugPrint('Exact schedule failed ($id), retrying inexact: $e');
+      try {
+        await schedule(AndroidScheduleMode.inexactAllowWhileIdle);
+      } catch (e2) {
+        debugPrint('Inexact schedule also failed ($id): $e2');
+      }
+    }
+  }
+
   Future<void> _scheduleItem(ScheduleItem item) async {
     final details = _detailsForPriority(item.priority);
-    try {
-      if (item.oneTime) {
-        if (item.date == null) return;
-        final when = _tz(DateTime(
-          item.date!.year,
-          item.date!.month,
-          item.date!.day,
-          item.start.hour,
-          item.start.minute,
-        ).subtract(Duration(minutes: item.reminderMinutesBefore)));
-        if (when.isBefore(tz.TZDateTime.now(tz.local))) return;
-        await _plugin.zonedSchedule(
-          item.notificationId,
-          '${item.type.label}: ${item.title}',
-          _itemBody(item),
-          when,
-          details,
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-          uiLocalNotificationDateInterpretation:
-              UILocalNotificationDateInterpretation.absoluteTime,
-        );
-      } else {
-        final when = _nextWeekly(
-            item.weekday, item.start, item.reminderMinutesBefore);
-        await _plugin.zonedSchedule(
-          item.notificationId,
-          '${item.type.label}: ${item.title}',
-          _itemBody(item),
-          when,
-          details,
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-          uiLocalNotificationDateInterpretation:
-              UILocalNotificationDateInterpretation.absoluteTime,
-          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
-        );
-      }
-    } catch (e) {
-      debugPrint('Failed to schedule item ${item.id}: $e');
+    if (item.oneTime) {
+      if (item.date == null) return;
+      final when = _tz(DateTime(
+        item.date!.year,
+        item.date!.month,
+        item.date!.day,
+        item.start.hour,
+        item.start.minute,
+      ).subtract(Duration(minutes: item.reminderMinutesBefore)));
+      if (when.isBefore(tz.TZDateTime.now(tz.local))) return;
+      await _zonedScheduleWithFallback(
+        id: item.notificationId,
+        title: '${item.type.label}: ${item.title}',
+        body: _itemBody(item),
+        when: when,
+        details: details,
+      );
+    } else {
+      final when =
+          _nextWeekly(item.weekday, item.start, item.reminderMinutesBefore);
+      await _zonedScheduleWithFallback(
+        id: item.notificationId,
+        title: '${item.type.label}: ${item.title}',
+        body: _itemBody(item),
+        when: when,
+        details: details,
+        matchComponents: DateTimeComponents.dayOfWeekAndTime,
+      );
     }
   }
 
@@ -315,21 +377,14 @@ class NotificationService {
     final desc = hw.description.isNotEmpty ? hw.description : 'Homework due';
     final body =
         '$desc \u2022 due ${_formatDate(hw.dueDate)} \u2022 for ${lab.title} lab';
-    try {
-      await _plugin.zonedSchedule(
-        hw.notificationId(lab.weekday),
-        'Homework: ${lab.title}',
-        body,
-        when,
-        details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
-      );
-    } catch (e) {
-      debugPrint('Failed to schedule homework ${hw.id}: $e');
-    }
+    await _zonedScheduleWithFallback(
+      id: hw.notificationId(lab.weekday),
+      title: 'Homework: ${lab.title}',
+      body: body,
+      when: when,
+      details: details,
+      matchComponents: DateTimeComponents.dayOfWeekAndTime,
+    );
   }
 
   String _formatDate(DateTime d) =>

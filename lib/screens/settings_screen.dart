@@ -84,6 +84,27 @@ class SettingsScreen extends StatelessWidget {
                   settings.setDefaultReminderMinutes(m ?? 10),
             ),
           ),
+          ListTile(
+            leading: const Icon(Icons.notification_add_outlined),
+            title: const Text('Send a test notification'),
+            subtitle: const Text('Check that reminders work on this device'),
+            onTap: () async {
+              await NotificationService.instance.requestPermissions();
+              final enabled =
+                  await NotificationService.instance.areNotificationsEnabled();
+              await NotificationService.instance.showTestNotification(
+                sound: settings.notificationSound,
+                vibrate: settings.vibrate,
+              );
+              if (!context.mounted) return;
+              _snack(
+                  context,
+                  enabled
+                      ? 'Test notification sent — check your notification shade'
+                      : 'Notifications are blocked for this app — enable them '
+                          'in Android settings');
+            },
+          ),
 
           const Divider(),
           _sectionHeader(context, 'Appearance'),

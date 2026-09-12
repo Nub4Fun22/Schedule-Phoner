@@ -11,6 +11,11 @@ Future<void> main() async {
 
   // Initialize notifications (timezone + channel) before the app starts.
   await NotificationService.instance.init();
+  // Ask for notification (and exact-alarm) permission up front so scheduled
+  // reminders actually fire. Best-effort — never block startup.
+  try {
+    await NotificationService.instance.requestPermissions();
+  } catch (_) {}
 
   runApp(const SchoolScheduleApp());
 }

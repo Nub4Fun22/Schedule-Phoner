@@ -164,13 +164,18 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
       reminderMinutesBefore: _reminderMinutes,
     );
 
-    await store.addOrUpdateItem(item);
-    // Return a result so the caller can confirm the save (e.g. show a
-    // snackbar). isNew=false when editing an existing item.
+    final result = ItemSaveResult(title: item.title, isNew: !_isEditing);
+    try {
+      await store.addOrUpdateItem(item);
+    } catch (e) {
+      // Persisting/scheduling should never block closing the editor. The item
+      // is saved in memory + prefs regardless; log and continue.
+      debugPrint('addOrUpdateItem error (continuing to close): $e');
+    }
+    // Always return a result so the caller can confirm the save and the editor
+    // closes, even if a side-effect (e.g. notification scheduling) failed.
     if (mounted) {
-      Navigator.of(context).pop(
-        ItemSaveResult(title: item.title, isNew: !_isEditing),
-      );
+      Navigator.of(context).pop(result);
     }
   }
 
