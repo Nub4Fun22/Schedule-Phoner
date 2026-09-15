@@ -14,9 +14,8 @@
         android:layout_height="wrap_content"
         android:text="Schedule Phoner"
         android:textColor="#FFB74D"
-        android:textSize="11sp"
+        android:textSize="12sp"
         android:textStyle="bold"
-        android:letterSpacing="0.05"
         android:maxLines="1"
         android:ellipsize="end" />
 
@@ -27,7 +26,19 @@
         android:layout_marginTop="2dp"
         android:text="No upcoming items"
         android:textColor="#FFFFFF"
-        android:textSize="18sp"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/widget_countdown"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="1dp"
+        android:text=""
+        android:textColor="#FFB74D"
+        android:textSize="16sp"
         android:textStyle="bold"
         android:maxLines="1"
         android:ellipsize="end" />
@@ -39,6 +50,29 @@
         android:layout_marginTop="2dp"
         android:text="Open the app to add some"
         android:textColor="#E0E0E0"
+        android:textSize="14sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/widget_following_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text=""
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/widget_following_sub"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="1dp"
+        android:text=""
+        android:textColor="#CFCFCF"
         android:textSize="13sp"
         android:maxLines="1"
         android:ellipsize="end" />
