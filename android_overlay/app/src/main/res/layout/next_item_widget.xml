@@ -16,7 +16,6 @@
         android:textColor="#FFB74D"
         android:textSize="13sp"
         android:textStyle="bold"
-        android:letterSpacing="0.08"
         android:maxLines="1"
         android:ellipsize="end" />
 
@@ -82,7 +81,6 @@
         android:textColor="#FFB74D"
         android:textSize="12sp"
         android:textStyle="bold"
-        android:letterSpacing="0.08"
         android:maxLines="1"
         android:ellipsize="end"
         android:visibility="gone" />
