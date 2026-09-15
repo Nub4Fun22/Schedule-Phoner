@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
@@ -35,6 +37,12 @@ class NotificationService {
   bool _soundEnabled = false;
   bool _vibrateEnabled = false; // vibration OFF by default
 
+  /// Explicit vibration pattern [delay, vibrate, pause, vibrate]. Providing a
+  /// pattern (not just enableVibration: true) makes many devices actually
+  /// vibrate reliably.
+  static final Int64List _vibrationPattern =
+      Int64List.fromList(<int>[0, 400, 200, 400]);
+
   /// The four importance levels, keyed by a short level name.
   static const Map<String, Importance> _levels = {
     'low': Importance.low, // courses
@@ -64,6 +72,7 @@ class NotificationService {
       importance: importance,
       playSound: sound,
       enableVibration: vibrate,
+      vibrationPattern: vibrate ? _vibrationPattern : null,
     );
   }
 
@@ -231,6 +240,7 @@ class NotificationService {
       // These match the channel's baked-in behavior (the channel wins anyway).
       playSound: _soundEnabled,
       enableVibration: _vibrateEnabled,
+      vibrationPattern: _vibrateEnabled ? _vibrationPattern : null,
     );
     final iosDetails = DarwinNotificationDetails(presentSound: _soundEnabled);
     return NotificationDetails(android: androidDetails, iOS: iosDetails);
@@ -263,6 +273,18 @@ class NotificationService {
     }
     if (scheduled.isBefore(now)) {
       scheduled = scheduled.add(const Duration(days: 7));
+    }
+    return scheduled;
+  }
+
+  /// Next occurrence of a daily time-of-day (today if still upcoming, else
+  /// tomorrow). Used for "remind daily until the lab/event" reminders.
+  tz.TZDateTime _nextDaily(SlotTime time) {
+    final now = tz.TZDateTime.now(tz.local);
+    var scheduled = tz.TZDateTime(
+        tz.local, now.year, now.month, now.day, time.hour, time.minute);
+    if (!scheduled.isAfter(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
     }
     return scheduled;
   }
@@ -421,14 +443,29 @@ class NotificationService {
   Future<void> _scheduleHomework(Homework hw, ScheduleItem lab) async {
     // Homework shares Project priority (default channel).
     final details = _detailsForPriority(hw.priority);
+    final desc = hw.description.isNotEmpty ? hw.description : 'Homework due';
+
+    // DAILY mode: remind every day at the chosen hour until the lab/due date.
+    if (hw.dailyUntil && hw.dailyReminderTime != null) {
+      final when = _nextDaily(hw.dailyReminderTime!);
+      final due = tz.TZDateTime.from(hw.dueDate, tz.local);
+      if (when.isAfter(due)) return;
+      await _zonedScheduleWithFallback(
+        id: hw.dailyNotificationId,
+        title: 'Homework: ${lab.title}',
+        body: '$desc \u2022 due ${_formatDate(hw.dueDate)} \u2022 daily reminder',
+        when: when,
+        details: details,
+        matchComponents: DateTimeComponents.time, // repeats daily
+      );
+      return;
+    }
+
+    // BEFORE-EACH-LAB mode (default).
     final when =
         _nextWeekly(lab.weekday, lab.start, hw.reminderMinutesBeforeLab);
-
-    // If the next reminder would land after the due date, don't schedule.
     final due = tz.TZDateTime.from(hw.dueDate, tz.local);
     if (when.isAfter(due)) return;
-
-    final desc = hw.description.isNotEmpty ? hw.description : 'Homework due';
     final body =
         '$desc \u2022 due ${_formatDate(hw.dueDate)} \u2022 for ${lab.title} lab';
     await _zonedScheduleWithFallback(
@@ -447,13 +484,29 @@ class NotificationService {
   /// not-past-due tasks here.
   Future<void> _scheduleTask(Task task, ScheduleItem event) async {
     final details = _detailsForPriority(task.priority);
+    final desc = task.description.isNotEmpty ? task.description : 'Task due';
+
+    // DAILY mode: remind every day at the chosen hour until the event/due date.
+    if (task.dailyUntil && task.dailyReminderTime != null) {
+      final when = _nextDaily(task.dailyReminderTime!);
+      final due = tz.TZDateTime.from(task.dueDate, tz.local);
+      if (when.isAfter(due)) return;
+      await _zonedScheduleWithFallback(
+        id: task.dailyNotificationId,
+        title: 'Task: ${event.title}',
+        body: '$desc \u2022 due ${_formatDate(task.dueDate)} \u2022 daily reminder',
+        when: when,
+        details: details,
+        matchComponents: DateTimeComponents.time, // repeats daily
+      );
+      return;
+    }
+
+    // BEFORE-EACH-EVENT mode (default).
     final when =
         _nextWeekly(event.weekday, event.start, task.reminderMinutesBeforeEvent);
-
     final due = tz.TZDateTime.from(task.dueDate, tz.local);
     if (when.isAfter(due)) return;
-
-    final desc = task.description.isNotEmpty ? task.description : 'Task due';
     final body =
         '$desc \u2022 due ${_formatDate(task.dueDate)} \u2022 for ${event.title}';
     await _zonedScheduleWithFallback(

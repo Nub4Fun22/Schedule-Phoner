@@ -109,9 +109,10 @@ class ScheduleStore extends ChangeNotifier {
     return list;
   }
 
-  /// All labs (for linking homework/projects).
+  /// All labs and seminars (for linking homework/projects). Labs and seminars
+  /// behave 1:1, so both can carry homework.
   List<ScheduleItem> get labs =>
-      _items.where((e) => e.type == ItemType.lab).toList();
+      _items.where((e) => e.type.carriesHomework).toList();
 
   /// All events (for attaching tasks).
   List<ScheduleItem> get events =>

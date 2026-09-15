@@ -74,6 +74,19 @@ class SampleSchedule {
         end: SlotTime(12, 0),
         colorValue: _teal,
       ),
+      // Seminar (weekly, permanent, carries homework — 1:1 with Lab)
+      const ScheduleItem(
+        id: '${demoPrefix}lit-seminar',
+        type: ItemType.seminar,
+        title: 'Literature',
+        description: 'Discussion seminar',
+        location: 'Room D2',
+        oneTime: false,
+        weekday: Weekday.thursday,
+        start: SlotTime(15, 0),
+        end: SlotTime(16, 30),
+        colorValue: _purple,
+      ),
       const ScheduleItem(
         id: '${demoPrefix}physics-lab',
         type: ItemType.lab,
@@ -224,6 +237,16 @@ class SampleSchedule {
         description: 'Pre-lab reading',
         dueDate: inDays(3),
         done: true,
+      ),
+      // Homework on the Literature seminar (seminars carry homework 1:1 w/ labs)
+      // with a daily-until-seminar reminder to showcase that option.
+      Homework(
+        id: '${demoPrefix}hw-5',
+        labId: '${demoPrefix}lit-seminar',
+        description: 'Read the assigned short story',
+        dueDate: inDays(6),
+        dailyUntil: true,
+        dailyReminderTime: const SlotTime(20, 0),
       ),
     ];
 

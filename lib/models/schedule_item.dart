@@ -88,6 +88,7 @@ enum ItemType {
   projectPresentation,
   exam,
   event,
+  seminar,
 }
 
 extension ItemTypeX on ItemType {
@@ -110,6 +111,8 @@ extension ItemTypeX on ItemType {
         return 60;
       case ItemType.event:
         return 5; // personal reminder — below academic items
+      case ItemType.seminar:
+        return 20; // 1:1 with Lab
     }
   }
 
@@ -129,6 +132,8 @@ extension ItemTypeX on ItemType {
         return 'Exam';
       case ItemType.event:
         return 'Event';
+      case ItemType.seminar:
+        return 'Seminar';
     }
   }
 
@@ -148,6 +153,8 @@ extension ItemTypeX on ItemType {
         return Icons.emoji_events_outlined;
       case ItemType.event:
         return Icons.event_note_outlined;
+      case ItemType.seminar:
+        return Icons.groups_outlined;
     }
   }
 
@@ -156,7 +163,14 @@ extension ItemTypeX on ItemType {
       this == ItemType.exam || this == ItemType.projectPresentation;
 
   /// Whether this type is always a recurring weekly event.
-  bool get isWeeklyOnly => this == ItemType.course || this == ItemType.lab;
+  bool get isWeeklyOnly =>
+      this == ItemType.course ||
+      this == ItemType.lab ||
+      this == ItemType.seminar;
+
+  /// Whether this type carries homework (Lab and Seminar are 1:1).
+  bool get carriesHomework =>
+      this == ItemType.lab || this == ItemType.seminar;
 
   /// Whether this type can be either one-time or weekly (user chooses).
   bool get supportsBothModes =>
@@ -204,6 +218,14 @@ class Homework {
   /// Minutes before each lab occurrence to remind. Default = 1 day (1440 min).
   final int reminderMinutesBeforeLab;
 
+  /// If true, instead of reminding once before each lab occurrence, remind
+  /// EVERY DAY at [dailyReminderTime] until the lab (i.e. until the due date /
+  /// next lab passes).
+  final bool dailyUntil;
+
+  /// The time-of-day for the daily reminder (used only when [dailyUntil]).
+  final SlotTime? dailyReminderTime;
+
   const Homework({
     required this.id,
     required this.labId,
@@ -211,6 +233,8 @@ class Homework {
     required this.dueDate,
     this.done = false,
     this.reminderMinutesBeforeLab = 24 * 60,
+    this.dailyUntil = false,
+    this.dailyReminderTime,
   });
 
   int get priority => kHomeworkPriority;
@@ -222,6 +246,8 @@ class Homework {
     DateTime? dueDate,
     bool? done,
     int? reminderMinutesBeforeLab,
+    bool? dailyUntil,
+    SlotTime? dailyReminderTime,
   }) =>
       Homework(
         id: id,
@@ -231,6 +257,8 @@ class Homework {
         done: done ?? this.done,
         reminderMinutesBeforeLab:
             reminderMinutesBeforeLab ?? this.reminderMinutesBeforeLab,
+        dailyUntil: dailyUntil ?? this.dailyUntil,
+        dailyReminderTime: dailyReminderTime ?? this.dailyReminderTime,
       );
 
   Map<String, dynamic> toJson() => {
@@ -240,6 +268,8 @@ class Homework {
         'dueDate': dueDate.toIso8601String(),
         'done': done,
         'reminderMinutesBeforeLab': reminderMinutesBeforeLab,
+        'dailyUntil': dailyUntil,
+        'dailyReminderTime': dailyReminderTime?.toJson(),
       };
 
   factory Homework.fromJson(Map<String, dynamic> j) => Homework(
@@ -250,11 +280,18 @@ class Homework {
         done: (j['done'] ?? false) as bool,
         reminderMinutesBeforeLab:
             (j['reminderMinutesBeforeLab'] ?? 24 * 60) as int,
+        dailyUntil: (j['dailyUntil'] ?? false) as bool,
+        dailyReminderTime: j['dailyReminderTime'] != null
+            ? SlotTime.fromJson(j['dailyReminderTime'] as Map<String, dynamic>)
+            : null,
       );
 
   /// Stable notification id namespace for homework-before-lab reminders.
   int notificationId(int weekdayOccurrence) =>
       ('hw_$id\_$weekdayOccurrence').hashCode & 0x7FFFFFFF;
+
+  /// Notification id namespace for the daily "until lab" reminder.
+  int get dailyNotificationId => ('hw_daily_$id').hashCode & 0x7FFFFFFF;
 }
 
 // ============================================================================
@@ -283,6 +320,12 @@ class Task {
   /// Minutes before each event occurrence to remind. Default = 1 day.
   final int reminderMinutesBeforeEvent;
 
+  /// If true, remind EVERY DAY at [dailyReminderTime] until the event.
+  final bool dailyUntil;
+
+  /// The time-of-day for the daily reminder (used only when [dailyUntil]).
+  final SlotTime? dailyReminderTime;
+
   const Task({
     required this.id,
     required this.eventId,
@@ -290,6 +333,8 @@ class Task {
     required this.dueDate,
     this.done = false,
     this.reminderMinutesBeforeEvent = 24 * 60,
+    this.dailyUntil = false,
+    this.dailyReminderTime,
   });
 
   int get priority => kTaskPriority;
@@ -301,6 +346,8 @@ class Task {
     DateTime? dueDate,
     bool? done,
     int? reminderMinutesBeforeEvent,
+    bool? dailyUntil,
+    SlotTime? dailyReminderTime,
   }) =>
       Task(
         id: id,
@@ -310,6 +357,8 @@ class Task {
         done: done ?? this.done,
         reminderMinutesBeforeEvent:
             reminderMinutesBeforeEvent ?? this.reminderMinutesBeforeEvent,
+        dailyUntil: dailyUntil ?? this.dailyUntil,
+        dailyReminderTime: dailyReminderTime ?? this.dailyReminderTime,
       );
 
   Map<String, dynamic> toJson() => {
@@ -319,6 +368,8 @@ class Task {
         'dueDate': dueDate.toIso8601String(),
         'done': done,
         'reminderMinutesBeforeEvent': reminderMinutesBeforeEvent,
+        'dailyUntil': dailyUntil,
+        'dailyReminderTime': dailyReminderTime?.toJson(),
       };
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -329,11 +380,18 @@ class Task {
         done: (j['done'] ?? false) as bool,
         reminderMinutesBeforeEvent:
             (j['reminderMinutesBeforeEvent'] ?? 24 * 60) as int,
+        dailyUntil: (j['dailyUntil'] ?? false) as bool,
+        dailyReminderTime: j['dailyReminderTime'] != null
+            ? SlotTime.fromJson(j['dailyReminderTime'] as Map<String, dynamic>)
+            : null,
       );
 
   /// Stable notification id namespace for task-before-event reminders.
   int notificationId(int weekdayOccurrence) =>
       ('task_$id\_$weekdayOccurrence').hashCode & 0x7FFFFFFF;
+
+  /// Notification id namespace for the daily "until event" reminder.
+  int get dailyNotificationId => ('task_daily_$id').hashCode & 0x7FFFFFFF;
 }
 
 // ============================================================================

@@ -5,6 +5,7 @@ import '../models/schedule_item.dart';
 import '../services/notification_service.dart';
 import '../state/schedule_store.dart';
 import '../widgets/color_utils.dart';
+import 'homework_task_dialog.dart';
 import 'item_editor_screen.dart';
 
 /// Details of a schedule item: type, when, duration, description, location,
@@ -74,7 +75,7 @@ class ItemDetailsScreen extends StatelessWidget {
                 _tile(context, Icons.notes, 'Description', item.description),
               const Divider(height: 24),
               _notificationSwitch(context, store, item),
-              if (item.type == ItemType.lab) ...[
+              if (item.type.carriesHomework) ...[
                 const Divider(height: 24),
                 _homeworkSection(context, store, item),
               ],
@@ -175,13 +176,35 @@ class ItemDetailsScreen extends StatelessWidget {
 
   Future<void> _editHomework(BuildContext context, ScheduleStore store,
       ScheduleItem lab, Homework? existing) async {
-    final result = await showDialog<Homework>(
+    final result = await showDialog<ReminderConfig>(
       context: context,
-      builder: (_) => _HomeworkDialog(lab: lab, existing: existing),
+      builder: (_) => ReminderDialog(
+        title: existing == null ? 'Add homework' : 'Edit homework',
+        parentLabel: 'lab',
+        descriptionHint: 'What is the homework? (optional)',
+        initial: existing == null
+            ? null
+            : ReminderConfig(
+                description: existing.description,
+                dueDate: existing.dueDate,
+                leadMinutes: existing.reminderMinutesBeforeLab,
+                dailyUntil: existing.dailyUntil,
+                dailyTime: existing.dailyReminderTime,
+              ),
+      ),
     );
     if (result != null) {
       await NotificationService.instance.requestPermissions();
-      await store.addOrUpdateHomework(result);
+      await store.addOrUpdateHomework(Homework(
+        id: existing?.id ?? 'hw-${DateTime.now().microsecondsSinceEpoch}',
+        labId: lab.id,
+        description: result.description,
+        dueDate: result.dueDate,
+        done: existing?.done ?? false,
+        reminderMinutesBeforeLab: result.leadMinutes,
+        dailyUntil: result.dailyUntil,
+        dailyReminderTime: result.dailyTime,
+      ));
     }
   }
 
@@ -249,13 +272,35 @@ class ItemDetailsScreen extends StatelessWidget {
 
   Future<void> _editTask(BuildContext context, ScheduleStore store,
       ScheduleItem event, Task? existing) async {
-    final result = await showDialog<Task>(
+    final result = await showDialog<ReminderConfig>(
       context: context,
-      builder: (_) => _TaskDialog(event: event, existing: existing),
+      builder: (_) => ReminderDialog(
+        title: existing == null ? 'Add task' : 'Edit task',
+        parentLabel: 'event',
+        descriptionHint: 'What is the task? (e.g. do dishes)',
+        initial: existing == null
+            ? null
+            : ReminderConfig(
+                description: existing.description,
+                dueDate: existing.dueDate,
+                leadMinutes: existing.reminderMinutesBeforeEvent,
+                dailyUntil: existing.dailyUntil,
+                dailyTime: existing.dailyReminderTime,
+              ),
+      ),
     );
     if (result != null) {
       await NotificationService.instance.requestPermissions();
-      await store.addOrUpdateTask(result);
+      await store.addOrUpdateTask(Task(
+        id: existing?.id ?? 'task-${DateTime.now().microsecondsSinceEpoch}',
+        eventId: event.id,
+        description: result.description,
+        dueDate: result.dueDate,
+        done: existing?.done ?? false,
+        reminderMinutesBeforeEvent: result.leadMinutes,
+        dailyUntil: result.dailyUntil,
+        dailyReminderTime: result.dailyTime,
+      ));
     }
   }
 
@@ -266,7 +311,7 @@ class ItemDetailsScreen extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         title: Text('Delete ${item.type.label.toLowerCase()}?'),
         content: Text('Remove "${item.title}"?'
-            '${item.type == ItemType.lab ? ' Its homework will also be removed.' : ''}'
+            '${item.type.carriesHomework ? ' Its homework will also be removed.' : ''}'
             '${item.type == ItemType.event ? ' Its tasks will also be removed.' : ''}'),
         actions: [
           TextButton(
@@ -286,223 +331,4 @@ class ItemDetailsScreen extends StatelessWidget {
 
   static String _fmtDate(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
-}
-
-/// Dialog to add/edit a homework attached to [lab].
-class _HomeworkDialog extends StatefulWidget {
-  final ScheduleItem lab;
-  final Homework? existing;
-  const _HomeworkDialog({required this.lab, this.existing});
-
-  @override
-  State<_HomeworkDialog> createState() => _HomeworkDialogState();
-}
-
-class _HomeworkDialogState extends State<_HomeworkDialog> {
-  late TextEditingController _desc;
-  late DateTime _due;
-  late int _lead;
-
-  static const List<int> _leadOptions = [0, 60, 2 * 60, 12 * 60, 24 * 60, 48 * 60];
-
-  @override
-  void initState() {
-    super.initState();
-    _desc = TextEditingController(text: widget.existing?.description ?? '');
-    _due = widget.existing?.dueDate ??
-        DateTime.now().add(const Duration(days: 7));
-    _lead = widget.existing?.reminderMinutesBeforeLab ?? 24 * 60;
-  }
-
-  @override
-  void dispose() {
-    _desc.dispose();
-    super.dispose();
-  }
-
-  String _leadLabel(int m) {
-    if (m == 0) return 'At lab time';
-    if (m == 24 * 60) return '1 day before lab';
-    if (m == 48 * 60) return '2 days before lab';
-    if (m >= 60) return '${m ~/ 60}h before lab';
-    return '$m min before lab';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.existing == null ? 'Add homework' : 'Edit homework'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _desc,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'What is the homework? (optional)',
-              ),
-            ),
-            const SizedBox(height: 12),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.event),
-              title: const Text('Due date'),
-              subtitle: Text(
-                  '${_due.day.toString().padLeft(2, '0')}/${_due.month.toString().padLeft(2, '0')}/${_due.year}'),
-              onTap: () async {
-                final now = DateTime.now();
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _due,
-                  firstDate: now,
-                  lastDate: now.add(const Duration(days: 365 * 2)),
-                );
-                if (picked != null) setState(() => _due = picked);
-              },
-            ),
-            DropdownButtonFormField<int>(
-              value: _leadOptions.contains(_lead) ? _lead : 24 * 60,
-              decoration: const InputDecoration(labelText: 'Remind me'),
-              items: [
-                for (final m in _leadOptions)
-                  DropdownMenuItem(value: m, child: Text(_leadLabel(m))),
-              ],
-              onChanged: (m) => setState(() => _lead = m ?? 24 * 60),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel')),
-        FilledButton(
-          onPressed: () {
-            final hw = Homework(
-              id: widget.existing?.id ??
-                  'hw-${DateTime.now().microsecondsSinceEpoch}',
-              labId: widget.lab.id,
-              description: _desc.text.trim(),
-              dueDate: _due,
-              done: widget.existing?.done ?? false,
-              reminderMinutesBeforeLab: _lead,
-            );
-            Navigator.of(context).pop(hw);
-          },
-          child: const Text('Save'),
-        ),
-      ],
-    );
-  }
-}
-
-
-/// Dialog to add/edit a task attached to [event].
-class _TaskDialog extends StatefulWidget {
-  final ScheduleItem event;
-  final Task? existing;
-  const _TaskDialog({required this.event, this.existing});
-
-  @override
-  State<_TaskDialog> createState() => _TaskDialogState();
-}
-
-class _TaskDialogState extends State<_TaskDialog> {
-  late TextEditingController _desc;
-  late DateTime _due;
-  late int _lead;
-
-  static const List<int> _leadOptions = [0, 60, 2 * 60, 12 * 60, 24 * 60, 48 * 60];
-
-  @override
-  void initState() {
-    super.initState();
-    _desc = TextEditingController(text: widget.existing?.description ?? '');
-    _due = widget.existing?.dueDate ??
-        DateTime.now().add(const Duration(days: 7));
-    _lead = widget.existing?.reminderMinutesBeforeEvent ?? 24 * 60;
-  }
-
-  @override
-  void dispose() {
-    _desc.dispose();
-    super.dispose();
-  }
-
-  String _leadLabel(int m) {
-    if (m == 0) return 'At event time';
-    if (m == 24 * 60) return '1 day before event';
-    if (m == 48 * 60) return '2 days before event';
-    if (m >= 60) return '${m ~/ 60}h before event';
-    return '$m min before event';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.existing == null ? 'Add task' : 'Edit task'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _desc,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'What is the task? (e.g. do dishes)',
-              ),
-            ),
-            const SizedBox(height: 12),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.event),
-              title: const Text('Due date'),
-              subtitle: Text(
-                  '${_due.day.toString().padLeft(2, '0')}/${_due.month.toString().padLeft(2, '0')}/${_due.year}'),
-              onTap: () async {
-                final now = DateTime.now();
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _due,
-                  firstDate: now,
-                  lastDate: now.add(const Duration(days: 365 * 2)),
-                );
-                if (picked != null) setState(() => _due = picked);
-              },
-            ),
-            DropdownButtonFormField<int>(
-              value: _leadOptions.contains(_lead) ? _lead : 24 * 60,
-              decoration: const InputDecoration(labelText: 'Remind me'),
-              items: [
-                for (final m in _leadOptions)
-                  DropdownMenuItem(value: m, child: Text(_leadLabel(m))),
-              ],
-              onChanged: (m) => setState(() => _lead = m ?? 24 * 60),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel')),
-        FilledButton(
-          onPressed: () {
-            final task = Task(
-              id: widget.existing?.id ??
-                  'task-${DateTime.now().microsecondsSinceEpoch}',
-              eventId: widget.event.id,
-              description: _desc.text.trim(),
-              dueDate: _due,
-              done: widget.existing?.done ?? false,
-              reminderMinutesBeforeEvent: _lead,
-            );
-            Navigator.of(context).pop(task);
-          },
-          child: const Text('Save'),
-        ),
-      ],
-    );
-  }
 }

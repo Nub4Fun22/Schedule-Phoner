@@ -16,7 +16,7 @@ class SettingsStore extends ChangeNotifier {
   bool _notificationSound = false; // silent by default (per the app spec)
   bool _vibrate = false; // vibration OFF by default
   ThemeMode _themeMode = ThemeMode.system;
-  bool _showWeekendInGrid = false;
+  bool _showWeekendInGrid = true; // show weekend columns by default
   int _defaultReminderMinutes = 10;
 
   bool _loaded = false;
@@ -35,7 +35,7 @@ class SettingsStore extends ChangeNotifier {
     _notificationSound = prefs.getBool(_kNotificationSound) ?? false;
     _vibrate = prefs.getBool(_kVibrate) ?? false; // OFF by default
     _themeMode = _themeModeFromString(prefs.getString(_kThemeMode));
-    _showWeekendInGrid = prefs.getBool(_kShowWeekend) ?? false;
+    _showWeekendInGrid = prefs.getBool(_kShowWeekend) ?? true; // ON by default
     _defaultReminderMinutes = prefs.getInt(_kDefaultReminder) ?? 10;
     _loaded = true;
     notifyListeners();

@@ -179,7 +179,7 @@ class WeekGridScreen extends StatelessWidget {
     final height =
         (item.durationMinutes / 60 * _hourHeight).clamp(26.0, double.infinity);
     final fg = contrastOn(item.color);
-    final hasHw = item.type == ItemType.lab &&
+    final hasHw = item.type.carriesHomework &&
         store.activeHomeworksForLab(item.id).isNotEmpty;
 
     return Positioned(
