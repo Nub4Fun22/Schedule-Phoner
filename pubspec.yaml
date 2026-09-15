@@ -1,7 +1,7 @@
 name: school_schedule
 description: A clean school timetable app with weekly grid and day views, event details, and per-event/all notifications.
 publish_to: 'none'
-version: 2.8.1+13
+version: 2.8.2+14
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
