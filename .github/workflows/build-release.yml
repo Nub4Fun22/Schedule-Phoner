@@ -2,12 +2,14 @@ name: Build & Release Android APK
 
 # WHAT THIS DOES
 # --------------
-# * On every push to `main`  -> builds the APK and updates a "latest" release
-#                               so there is always an up-to-date downloadable
-#                               APK reflecting your newest fixes/features.
-# * On every version tag v*  -> builds the APK and publishes a versioned
-#                               release (e.g. v1.2.0) that stays around.
-# * Manual run (Actions tab) -> builds on demand.
+# * On every push to `main`     -> builds the APK and updates the "latest"
+#                                  release (stable).
+# * On every push to feature/** -> builds the APK and updates a separate
+#                                  "beta" pre-release for testing, WITHOUT
+#                                  touching the stable "latest" release.
+# * On every version tag v*     -> builds the APK and publishes a versioned
+#                                  release (e.g. v1.2.0) that stays around.
+# * Manual run (Actions tab)    -> builds on demand.
 #
 # The downloadable APK always appears on the repo's "Releases" page.
 
@@ -15,6 +17,7 @@ on:
   push:
     branches:
       - main
+      - 'feature/**'   # feature branches publish a separate "beta" release
     tags:
       - 'v*'
   workflow_dispatch:
@@ -154,6 +157,34 @@ jobs:
             echo "No assets/icon/app_icon.png found — keeping default icon"
           fi
 
+      - name: Make beta a side-by-side app (feature branches only)
+        # Give beta builds a distinct applicationId (.beta) and label so the
+        # beta installs ALONGSIDE the stable app instead of replacing it — you
+        # keep your working app while testing new features.
+        if: startsWith(github.ref, 'refs/heads/feature/')
+        run: |
+          set -e
+          f=android/app/build.gradle
+          if [ -f "$f" ]; then
+            {
+              printf '\n'
+              printf '// Injected by CI: side-by-side beta app id + label.\n'
+              printf 'android {\n'
+              printf '    defaultConfig {\n'
+              printf '        applicationIdSuffix ".beta"\n'
+              printf '        resValue "string", "app_name_beta", "Schedule Phoner (Beta)"\n'
+              printf '    }\n'
+              printf '}\n'
+            } >> "$f"
+            echo "Applied beta applicationIdSuffix to $f"
+          fi
+          # Relabel the app so the beta icon is distinguishable on the launcher.
+          m=android/app/src/main/AndroidManifest.xml
+          if [ -f "$m" ]; then
+            sed -i 's/android:label="Schedule Phoner"/android:label="Schedule Phoner (Beta)"/' "$m"
+            echo "Relabelled app in $m"
+          fi
+
       - name: Build release APK
         run: flutter build apk --release
 
@@ -175,6 +206,30 @@ jobs:
             Download **schedule-phoner.apk** below and open it on your Android
             phone to install (allow "install from unknown sources" if asked).
           files: dist/schedule-phoner.apk
+          fail_on_unmatched_files: true
+
+# Beta pre-release for feature/** branches — kept separate from "latest".
+      - name: Prepare beta APK
+        if: startsWith(github.ref, 'refs/heads/feature/')
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk dist/schedule-phoner-beta.apk
+          ls -lh dist
+
+      - name: Publish/refresh the "beta" pre-release
+        if: startsWith(github.ref, 'refs/heads/feature/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: beta
+          name: Beta build
+          prerelease: true
+          body: |
+            ⚠️ **Beta build** — experimental features under test, built from a
+            feature branch (`${{ github.ref_name }}`). This does NOT affect the
+            stable **latest** release.
+
+            Download **schedule-phoner-beta.apk** below and install it on your
+            Android phone (allow "install from unknown sources" if asked).
+          files: dist/schedule-phoner-beta.apk
           fail_on_unmatched_files: true
 
       # Versioned, permanent releases when you push a tag like v1.2.0.

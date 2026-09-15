@@ -3,21 +3,23 @@ import 'package:home_widget/home_widget.dart';
 
 import '../models/schedule_item.dart';
 
-/// Pushes "next item" data to the Android home-screen widget.
+/// Pushes "next item" data to the Android home-screen widget (4x2).
 ///
 /// The native [NextItemWidgetProvider] reads these keys:
-///   next_type      e.g. "Course"
-///   next_title     e.g. "Mathematics"
-///   next_subtitle  e.g. "Tomorrow • 08:00 • Room A1"
-///   next_countdown e.g. "in 2h 15m" / "in 3d"
-///   following      e.g. "Next: Physics Lab • Wed 10:00"  (may be empty)
+///   next_type        e.g. "Course"
+///   next_title       e.g. "Mathematics"
+///   next_subtitle    e.g. "Tomorrow • 08:00 • Room A1"
+///   next_countdown   e.g. "in 2h 15m" / "in 3d"
+///   following_label  e.g. "UP NEXT"  (empty when there's no second item)
+///   following_title  e.g. "Physics Lab"
+///   following_sub    e.g. "Wed • 10:00 • in 1d 2h"
 class WidgetService {
   WidgetService._();
   static final WidgetService instance = WidgetService._();
 
   static const String _androidProvider = 'NextItemWidgetProvider';
 
-  /// Update the 3x1 widget with the next Course/Lab/Test/Exam occurrence and
+  /// Update the 4x2 widget with the next Course/Lab/Test/Exam occurrence and
   /// the one after it. [item]/[occurrenceWhen] may be null if nothing is
   /// scheduled; [following]/[followingWhen] is the item after the next one.
   Future<void> updateNextItem({
@@ -34,7 +36,9 @@ class WidgetService {
         await HomeWidget.saveWidgetData<String>(
             'next_subtitle', 'Open the app to add some');
         await HomeWidget.saveWidgetData<String>('next_countdown', '');
-        await HomeWidget.saveWidgetData<String>('following', '');
+        await HomeWidget.saveWidgetData<String>('following_label', '');
+        await HomeWidget.saveWidgetData<String>('following_title', '');
+        await HomeWidget.saveWidgetData<String>('following_sub', '');
       } else {
         await HomeWidget.saveWidgetData<String>('next_type', item.type.label);
         await HomeWidget.saveWidgetData<String>('next_title', item.title);
@@ -42,11 +46,18 @@ class WidgetService {
             'next_subtitle', _subtitle(item, occurrenceWhen));
         await HomeWidget.saveWidgetData<String>(
             'next_countdown', _countdown(occurrenceWhen));
-        await HomeWidget.saveWidgetData<String>(
-            'following',
-            following != null && followingWhen != null
-                ? 'Next: ${following.title} • ${_shortWhen(following, followingWhen)}'
-                : '');
+
+        if (following != null && followingWhen != null) {
+          await HomeWidget.saveWidgetData<String>('following_label', 'UP NEXT');
+          await HomeWidget.saveWidgetData<String>(
+              'following_title', '${following.type.label}: ${following.title}');
+          await HomeWidget.saveWidgetData<String>(
+              'following_sub', _followingSub(following, followingWhen));
+        } else {
+          await HomeWidget.saveWidgetData<String>('following_label', '');
+          await HomeWidget.saveWidgetData<String>('following_title', '');
+          await HomeWidget.saveWidgetData<String>('following_sub', '');
+        }
       }
       await HomeWidget.updateWidget(name: _androidProvider);
     } catch (e) {
@@ -61,9 +72,9 @@ class WidgetService {
     return '${_dayLabel(when)} • ${item.start.format()}$loc';
   }
 
-  /// "Physics Lab • Wed 10:00" style used for the "Next:" second line.
-  String _shortWhen(ScheduleItem item, DateTime when) {
-    return '${_dayLabel(when)} ${item.start.format()}';
+  /// "Wed • 10:00 • in 1d 2h" for the second (following) item.
+  String _followingSub(ScheduleItem item, DateTime when) {
+    return '${_dayLabel(when)} • ${item.start.format()} • ${_countdown(when)}';
   }
 
   String _dayLabel(DateTime when) {

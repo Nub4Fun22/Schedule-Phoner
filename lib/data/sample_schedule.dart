@@ -9,7 +9,12 @@ import '../models/schedule_item.dart';
 class SampleData {
   final List<ScheduleItem> items;
   final List<Homework> homeworks;
-  const SampleData({required this.items, required this.homeworks});
+  final List<Task> tasks;
+  const SampleData({
+    required this.items,
+    required this.homeworks,
+    this.tasks = const [],
+  });
 }
 
 class SampleSchedule {
@@ -68,6 +73,19 @@ class SampleSchedule {
         start: SlotTime(10, 0),
         end: SlotTime(12, 0),
         colorValue: _teal,
+      ),
+      // Seminar (weekly, permanent, carries homework — 1:1 with Lab)
+      const ScheduleItem(
+        id: '${demoPrefix}lit-seminar',
+        type: ItemType.seminar,
+        title: 'Literature',
+        description: 'Discussion seminar',
+        location: 'Room D2',
+        oneTime: false,
+        weekday: Weekday.thursday,
+        start: SlotTime(15, 0),
+        end: SlotTime(16, 30),
+        colorValue: _purple,
       ),
       const ScheduleItem(
         id: '${demoPrefix}physics-lab',
@@ -161,6 +179,33 @@ class SampleSchedule {
         end: const SlotTime(15, 0),
         colorValue: _indigo,
       ),
+
+      // --- Event (personal reminder, weekly, can carry tasks) --------------
+      const ScheduleItem(
+        id: '${demoPrefix}chores-event',
+        type: ItemType.event,
+        title: 'Chores',
+        description: 'Weekly personal reminders',
+        location: 'Home',
+        oneTime: false,
+        weekday: Weekday.sunday,
+        start: SlotTime(18, 0),
+        end: SlotTime(18, 30),
+        colorValue: _green,
+      ),
+      // --- Event (one-time personal reminder) ------------------------------
+      ScheduleItem(
+        id: '${demoPrefix}dentist-event',
+        type: ItemType.event,
+        title: 'Dentist appointment',
+        description: 'Checkup',
+        location: 'Clinic',
+        oneTime: true,
+        date: inDays(6),
+        start: const SlotTime(16, 0),
+        end: const SlotTime(16, 30),
+        colorValue: _brown,
+      ),
     ];
 
     final homeworks = <Homework>[
@@ -193,8 +238,42 @@ class SampleSchedule {
         dueDate: inDays(3),
         done: true,
       ),
+      // Homework on the Literature seminar (seminars carry homework 1:1 w/ labs)
+      // with a daily-until-seminar reminder to showcase that option.
+      Homework(
+        id: '${demoPrefix}hw-5',
+        labId: '${demoPrefix}lit-seminar',
+        description: 'Read the assigned short story',
+        dueDate: inDays(6),
+        dailyUntil: true,
+        dailyReminderTime: const SlotTime(20, 0),
+      ),
     ];
 
-    return SampleData(items: items, homeworks: homeworks);
+    final tasks = <Task>[
+      // Tasks attached to the weekly "Chores" event.
+      Task(
+        id: '${demoPrefix}task-1',
+        eventId: '${demoPrefix}chores-event',
+        description: 'Do the dishes',
+        dueDate: inDays(2),
+      ),
+      Task(
+        id: '${demoPrefix}task-2',
+        eventId: '${demoPrefix}chores-event',
+        description: 'Take out the trash',
+        dueDate: inDays(4),
+      ),
+      // A done task to show the checked state.
+      Task(
+        id: '${demoPrefix}task-3',
+        eventId: '${demoPrefix}chores-event',
+        description: 'Water the plants',
+        dueDate: inDays(1),
+        done: true,
+      ),
+    ];
+
+    return SampleData(items: items, homeworks: homeworks, tasks: tasks);
   }
 }

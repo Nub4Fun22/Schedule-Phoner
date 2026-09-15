@@ -5,6 +5,8 @@ import '../models/schedule_item.dart';
 import '../state/schedule_store.dart';
 import '../state/settings_store.dart';
 import '../widgets/color_utils.dart';
+import '../widgets/date_format_utils.dart';
+import 'homework_task_dialog.dart';
 
 /// Result returned when an item is saved, so callers can show confirmation.
 class ItemSaveResult {
@@ -40,6 +42,17 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
   late int _reminderMinutes;
 
   bool get _isEditing => widget.existing != null;
+
+  /// Homework/tasks the user adds inline while CREATING a new lab/seminar/event
+  /// (before it has an id). Persisted on save. Only used for new items.
+  final List<ReminderConfig> _pendingSubItems = [];
+
+  /// Whether the current type carries inline sub-items (homework or tasks).
+  bool get _carriesSubItems =>
+      _type.carriesHomework || _type == ItemType.event;
+
+  /// Word for the sub-item given the current type.
+  String get _subItemNoun => _type == ItemType.event ? 'task' : 'homework';
 
   static const List<int> _leadOptions = [0, 5, 10, 15, 30, 60, 120, 24 * 60];
 
@@ -167,6 +180,30 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
     final result = ItemSaveResult(title: item.title, isNew: !_isEditing);
     try {
       await store.addOrUpdateItem(item);
+      // Persist any inline-added homework/tasks now that the item has an id.
+      for (final cfg in _pendingSubItems) {
+        if (_type == ItemType.event) {
+          await store.addOrUpdateTask(Task(
+            id: 'task-${DateTime.now().microsecondsSinceEpoch}-${cfg.hashCode & 0xFFFF}',
+            eventId: item.id,
+            description: cfg.description,
+            dueDate: cfg.dueDate,
+            reminderMinutesBeforeEvent: cfg.leadMinutes,
+            dailyUntil: cfg.dailyUntil,
+            dailyReminderTime: cfg.dailyTime,
+          ));
+        } else {
+          await store.addOrUpdateHomework(Homework(
+            id: 'hw-${DateTime.now().microsecondsSinceEpoch}-${cfg.hashCode & 0xFFFF}',
+            labId: item.id,
+            description: cfg.description,
+            dueDate: cfg.dueDate,
+            reminderMinutesBeforeLab: cfg.leadMinutes,
+            dailyUntil: cfg.dailyUntil,
+            dailyReminderTime: cfg.dailyTime,
+          ));
+        }
+      }
     } catch (e) {
       // Persisting/scheduling should never block closing the editor. The item
       // is saved in memory + prefs regardless; log and continue.
@@ -210,7 +247,7 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final t in ItemType.values)
+                for (final t in ItemTypeX.displayOrder)
                   ChoiceChip(
                     avatar: Icon(t.icon, size: 18),
                     label: Text(t.label),
@@ -341,15 +378,22 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
             const SizedBox(height: 8),
             _colorPicker(),
 
-            if (_type == ItemType.lab && _isEditing) ...[
-              const SizedBox(height: 8),
-              const Divider(),
-              _labHomeworkHint(),
-            ],
             if (_type == ItemType.project) ...[
               const SizedBox(height: 8),
               const Divider(),
               _projectLabHint(),
+            ],
+            // Inline homework/tasks when CREATING a lab/seminar/event.
+            if (_carriesSubItems && !_isEditing) ...[
+              const SizedBox(height: 8),
+              const Divider(),
+              _inlineSubItemsSection(),
+            ],
+            // When editing, sub-items are managed from the details screen.
+            if (_carriesSubItems && _isEditing) ...[
+              const SizedBox(height: 8),
+              const Divider(),
+              _editHintForSubItems(),
             ],
           ],
         ),
@@ -406,17 +450,87 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
     );
   }
 
-  Widget _labHomeworkHint() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
+  /// Inline homework/task list shown while creating a lab/seminar/event, so the
+  /// user can add them "on the spot".
+  Widget _inlineSubItemsSection() {
+    final noun = _subItemNoun;
+    final title = _type == ItemType.event ? 'Tasks' : 'Homework';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleSmall),
+            const Spacer(),
+            FilledButton.tonalIcon(
+              icon: const Icon(Icons.add, size: 18),
+              label: Text('Add $noun'),
+              onPressed: _addInlineSubItem,
+            ),
+          ],
+        ),
+        if (_pendingSubItems.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Optionally add $noun now. You can also add more later from the '
+              '${_type.label.toLowerCase()}\'s details screen.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        for (int i = 0; i < _pendingSubItems.length; i++)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.check_box_outline_blank),
+            title: Text(_pendingSubItems[i].description.isEmpty
+                ? (_type == ItemType.event ? 'Task' : 'Homework')
+                : _pendingSubItems[i].description),
+            subtitle: Text(_subItemSubtitle(_pendingSubItems[i])),
+            trailing: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () =>
+                  setState(() => _pendingSubItems.removeAt(i)),
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _subItemSubtitle(ReminderConfig c) {
+    final due = DateFormatUtils.dueWithCountdown(c.dueDate);
+    if (c.dailyUntil && c.dailyTime != null) {
+      return 'Due $due • daily at ${c.dailyTime!.format()}';
+    }
+    return 'Due $due';
+  }
+
+  Future<void> _addInlineSubItem() async {
+    final noun = _subItemNoun;
+    final cfg = await showDialog<ReminderConfig>(
+      context: context,
+      builder: (_) => ReminderDialog(
+        title: 'Add $noun',
+        parentLabel: _type == ItemType.event ? 'event' : 'lab',
+        descriptionHint: _type == ItemType.event
+            ? 'What is the task? (e.g. do dishes)'
+            : 'What is the homework? (optional)',
+      ),
+    );
+    if (cfg != null) setState(() => _pendingSubItems.add(cfg));
+  }
+
+  Widget _editHintForSubItems() {
+    final noun = _subItemNoun;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Icon(Icons.info_outline, size: 18),
-          SizedBox(width: 8),
+          const Icon(Icons.info_outline, size: 18),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Save this lab, then open it from the schedule to add homework '
-              'that reminds you before each lab.',
+              'Manage $noun from this ${_type.label.toLowerCase()}\'s details '
+              'screen (open it from the schedule).',
             ),
           ),
         ],
@@ -441,4 +555,5 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
       ),
     );
   }
+
 }

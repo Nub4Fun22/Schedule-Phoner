@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
@@ -8,14 +10,16 @@ import '../models/schedule_item.dart';
 
 /// Handles all local notifications.
 ///
-/// Design points (per the app spec):
-/// * ALL notifications are SILENT (no sound) — we create channels with
-///   `playSound: false` and a null sound.
+/// Design points:
+/// * Sound and vibration follow the user's settings (silent + no-vibrate by
+///   default). Because Android bakes sound/vibration into a channel at
+///   creation, we keep a channel per (sound × vibrate × importance) combo.
 /// * Notification importance is derived from item priority (higher priority
 ///   => more prominent channel).
 /// * Weekly items repeat weekly; one-time items fire once.
-/// * Homework reminders fire before EACH weekly occurrence of their lab and
-///   repeat weekly, but only while the homework is not done and not past due.
+/// * Homework reminders fire before EACH weekly occurrence of their lab, and
+///   Task reminders before each weekly occurrence of their Event; both repeat
+///   weekly while not done and not past due.
 class NotificationService {
   NotificationService._();
   static final NotificationService instance = NotificationService._();
@@ -25,72 +29,64 @@ class NotificationService {
 
   bool _initialized = false;
 
-  /// Whether the current run should play a sound. Android bakes sound into the
-  /// channel at creation time, so we keep two parallel channel sets (silent and
-  /// sound) and pick the right one per notification based on this flag.
+  /// Current sound/vibrate preferences. Android bakes sound AND vibration into
+  /// the CHANNEL at creation time (per-notification flags are ignored once a
+  /// channel exists), so we create a distinct channel for each
+  /// (sound × vibrate × priority-level) combination and select the matching
+  /// one. When the preferences change we (re)create the needed channels.
   bool _soundEnabled = false;
-  bool _vibrateEnabled = true;
+  bool _vibrateEnabled = false; // vibration OFF by default
 
-  // --- Silent channels (no sound), increasing importance by priority --------
-  static const AndroidNotificationChannel _chLow = AndroidNotificationChannel(
-    'sp_silent_low',
-    'Courses (silent)',
-    description: 'Silent reminders for courses',
-    importance: Importance.low,
-    playSound: false,
-  );
-  static const AndroidNotificationChannel _chDefault =
-      AndroidNotificationChannel(
-    'sp_silent_default',
-    'Labs & homework (silent)',
-    description: 'Silent reminders for labs, homework and projects',
-    importance: Importance.defaultImportance,
-    playSound: false,
-  );
-  static const AndroidNotificationChannel _chHigh = AndroidNotificationChannel(
-    'sp_silent_high',
-    'Tests & presentations (silent)',
-    description: 'Silent reminders for tests and presentations',
-    importance: Importance.high,
-    playSound: false,
-  );
-  static const AndroidNotificationChannel _chMax = AndroidNotificationChannel(
-    'sp_silent_max',
-    'Exams (silent)',
-    description: 'Silent reminders for exams',
-    importance: Importance.max,
-    playSound: false,
-  );
+  /// Explicit vibration pattern [delay, vibrate, pause, vibrate]. Providing a
+  /// pattern (not just enableVibration: true) makes many devices actually
+  /// vibrate reliably.
+  static final Int64List _vibrationPattern =
+      Int64List.fromList(<int>[0, 400, 200, 400]);
 
-  // --- Sound channels (default system sound), same importance ladder --------
-  static const AndroidNotificationChannel _chLowSound =
-      AndroidNotificationChannel(
-    'sp_sound_low',
-    'Courses',
-    description: 'Reminders for courses',
-    importance: Importance.low,
-  );
-  static const AndroidNotificationChannel _chDefaultSound =
-      AndroidNotificationChannel(
-    'sp_sound_default',
-    'Labs & homework',
-    description: 'Reminders for labs, homework and projects',
-    importance: Importance.defaultImportance,
-  );
-  static const AndroidNotificationChannel _chHighSound =
-      AndroidNotificationChannel(
-    'sp_sound_high',
-    'Tests & presentations',
-    description: 'Reminders for tests and presentations',
-    importance: Importance.high,
-  );
-  static const AndroidNotificationChannel _chMaxSound =
-      AndroidNotificationChannel(
-    'sp_sound_max',
-    'Exams',
-    description: 'Reminders for exams',
-    importance: Importance.max,
-  );
+  /// The four importance levels, keyed by a short level name.
+  static const Map<String, Importance> _levels = {
+    'low': Importance.low, // courses
+    'default': Importance.defaultImportance, // labs / homework / projects
+    'high': Importance.high, // tests / presentations
+    'max': Importance.max, // exams
+  };
+
+  /// Build the channel id for a (sound, vibrate, level) combination. Encoding
+  /// the flags in the id is required because a channel's sound/vibration can't
+  /// be changed after it's first created.
+  String _channelId(bool sound, bool vibrate, String level) =>
+      'sp_${sound ? 'snd' : 'sil'}_${vibrate ? 'vib' : 'novib'}_$level';
+
+  String _channelName(bool sound, bool vibrate, String level) {
+    final s = sound ? 'sound' : 'silent';
+    final v = vibrate ? ', vibrate' : '';
+    return 'Reminders ($level, $s$v)';
+  }
+
+  AndroidNotificationChannel _buildChannel(
+      bool sound, bool vibrate, String level, Importance importance) {
+    return AndroidNotificationChannel(
+      _channelId(sound, vibrate, level),
+      _channelName(sound, vibrate, level),
+      description: 'Reminders — $level importance',
+      importance: importance,
+      playSound: sound,
+      enableVibration: vibrate,
+      vibrationPattern: vibrate ? _vibrationPattern : null,
+    );
+  }
+
+  /// (Re)create the channel set for the CURRENT sound/vibrate preferences.
+  Future<void> _ensureChannels() async {
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (android == null) return;
+    for (final entry in _levels.entries) {
+      await android.createNotificationChannel(
+        _buildChannel(_soundEnabled, _vibrateEnabled, entry.key, entry.value),
+      );
+    }
+  }
 
   Future<void> init() async {
     if (_initialized) return;
@@ -121,14 +117,8 @@ class NotificationService {
 
     await _plugin.initialize(initSettings);
 
-    final android = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    for (final ch in [
-      _chLow, _chDefault, _chHigh, _chMax, // silent set
-      _chLowSound, _chDefaultSound, _chHighSound, _chMaxSound, // sound set
-    ]) {
-      await android?.createNotificationChannel(ch);
-    }
+    // Create the channel set for the current preferences.
+    await _ensureChannels();
 
     _initialized = true;
   }
@@ -163,6 +153,7 @@ class NotificationService {
     await init();
     _soundEnabled = sound;
     _vibrateEnabled = vibrate;
+    await _ensureChannels();
     // Use the "test" priority (default channel) so it's clearly visible.
     final details = _detailsForPriority(ItemType.test.priority);
     await _plugin.show(
@@ -188,6 +179,7 @@ class NotificationService {
       await init();
       _soundEnabled = sound;
       _vibrateEnabled = vibrate;
+      await _ensureChannels();
       final details = _detailsForPriority(ItemType.test.priority);
       final when =
           tz.TZDateTime.now(tz.local).add(Duration(seconds: seconds));
@@ -227,29 +219,28 @@ class NotificationService {
 
   // --- channel/details selection by priority -------------------------------
 
-  AndroidNotificationChannel _channelForPriority(int priority) {
-    if (_soundEnabled) {
-      if (priority >= ItemType.exam.priority) return _chMaxSound;
-      if (priority >= ItemType.test.priority) return _chHighSound;
-      if (priority >= ItemType.lab.priority) return _chDefaultSound;
-      return _chLowSound;
-    }
-    if (priority >= ItemType.exam.priority) return _chMax;
-    if (priority >= ItemType.test.priority) return _chHigh;
-    if (priority >= ItemType.lab.priority) return _chDefault;
-    return _chLow;
+  /// The level name for a given priority.
+  String _levelForPriority(int priority) {
+    if (priority >= ItemType.exam.priority) return 'max';
+    if (priority >= ItemType.test.priority) return 'high';
+    if (priority >= ItemType.lab.priority) return 'default';
+    return 'low';
   }
 
   NotificationDetails _detailsForPriority(int priority) {
-    final ch = _channelForPriority(priority);
+    final level = _levelForPriority(priority);
+    final importance = _levels[level]!;
+    final id = _channelId(_soundEnabled, _vibrateEnabled, level);
     final androidDetails = AndroidNotificationDetails(
-      ch.id,
-      ch.name,
-      channelDescription: ch.description,
-      importance: ch.importance,
+      id,
+      _channelName(_soundEnabled, _vibrateEnabled, level),
+      channelDescription: 'Reminders — $level importance',
+      importance: importance,
       priority: _androidPriority(priority),
+      // These match the channel's baked-in behavior (the channel wins anyway).
       playSound: _soundEnabled,
       enableVibration: _vibrateEnabled,
+      vibrationPattern: _vibrateEnabled ? _vibrationPattern : null,
     );
     final iosDetails = DarwinNotificationDetails(presentSound: _soundEnabled);
     return NotificationDetails(android: androidDetails, iOS: iosDetails);
@@ -286,6 +277,18 @@ class NotificationService {
     return scheduled;
   }
 
+  /// Next occurrence of a daily time-of-day (today if still upcoming, else
+  /// tomorrow). Used for "remind daily until the lab/event" reminders.
+  tz.TZDateTime _nextDaily(SlotTime time) {
+    final now = tz.TZDateTime.now(tz.local);
+    var scheduled = tz.TZDateTime(
+        tz.local, now.year, now.month, now.day, time.hour, time.minute);
+    if (!scheduled.isAfter(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
+    return scheduled;
+  }
+
   String _itemBody(ScheduleItem item) {
     final parts = <String>[item.intervalLabel];
     if (item.location.isNotEmpty) parts.add(item.location);
@@ -302,12 +305,14 @@ class NotificationService {
   Future<void> rescheduleAll({
     required List<ScheduleItem> items,
     required List<Homework> homeworks,
+    List<Task> tasks = const [],
     bool sound = false,
     bool vibrate = true,
   }) async {
     await init();
     _soundEnabled = sound;
     _vibrateEnabled = vibrate;
+    await _ensureChannels();
     await _plugin.cancelAll();
 
     for (final item in items) {
@@ -316,21 +321,33 @@ class NotificationService {
       }
     }
 
-    // Homework reminders are tied to their lab's weekly occurrences.
     final now = DateTime.now();
+
+    // Homework reminders are tied to their lab's weekly occurrences.
     for (final hw in homeworks) {
       if (hw.done) continue;
       if (hw.dueDate.isBefore(now)) continue; // past due -> stop nagging
-      ScheduleItem? lab;
-      for (final it in items) {
-        if (it.id == hw.labId) {
-          lab = it;
-          break;
-        }
-      }
+      final lab = _findById(items, hw.labId);
       if (lab == null || lab.oneTime) continue;
       await _scheduleHomework(hw, lab);
     }
+
+    // Task reminders are tied to their event's weekly occurrences (same model
+    // as homework-before-lab).
+    for (final task in tasks) {
+      if (task.done) continue;
+      if (task.dueDate.isBefore(now)) continue;
+      final event = _findById(items, task.eventId);
+      if (event == null || event.oneTime) continue;
+      await _scheduleTask(task, event);
+    }
+  }
+
+  ScheduleItem? _findById(List<ScheduleItem> items, String id) {
+    for (final it in items) {
+      if (it.id == id) return it;
+    }
+    return null;
   }
 
   /// Schedules a notification, trying exact mode first and transparently
@@ -426,19 +443,75 @@ class NotificationService {
   Future<void> _scheduleHomework(Homework hw, ScheduleItem lab) async {
     // Homework shares Project priority (default channel).
     final details = _detailsForPriority(hw.priority);
+    final desc = hw.description.isNotEmpty ? hw.description : 'Homework due';
+
+    // DAILY mode: remind every day at the chosen hour until the lab/due date.
+    if (hw.dailyUntil && hw.dailyReminderTime != null) {
+      final when = _nextDaily(hw.dailyReminderTime!);
+      final due = tz.TZDateTime.from(hw.dueDate, tz.local);
+      if (when.isAfter(due)) return;
+      await _zonedScheduleWithFallback(
+        id: hw.dailyNotificationId,
+        title: 'Homework: ${lab.title}',
+        body: '$desc \u2022 due ${_formatDate(hw.dueDate)} \u2022 daily reminder',
+        when: when,
+        details: details,
+        matchComponents: DateTimeComponents.time, // repeats daily
+      );
+      return;
+    }
+
+    // BEFORE-EACH-LAB mode (default).
     final when =
         _nextWeekly(lab.weekday, lab.start, hw.reminderMinutesBeforeLab);
-
-    // If the next reminder would land after the due date, don't schedule.
     final due = tz.TZDateTime.from(hw.dueDate, tz.local);
     if (when.isAfter(due)) return;
-
-    final desc = hw.description.isNotEmpty ? hw.description : 'Homework due';
     final body =
         '$desc \u2022 due ${_formatDate(hw.dueDate)} \u2022 for ${lab.title} lab';
     await _zonedScheduleWithFallback(
       id: hw.notificationId(lab.weekday),
       title: 'Homework: ${lab.title}',
+      body: body,
+      when: when,
+      details: details,
+      matchComponents: DateTimeComponents.dayOfWeekAndTime,
+    );
+  }
+
+  /// Task reminder: fires before each weekly occurrence of its Event and
+  /// repeats weekly, using the task's own lead time (default 1 day). Mirrors
+  /// the homework-before-lab behavior. The store only passes not-done,
+  /// not-past-due tasks here.
+  Future<void> _scheduleTask(Task task, ScheduleItem event) async {
+    final details = _detailsForPriority(task.priority);
+    final desc = task.description.isNotEmpty ? task.description : 'Task due';
+
+    // DAILY mode: remind every day at the chosen hour until the event/due date.
+    if (task.dailyUntil && task.dailyReminderTime != null) {
+      final when = _nextDaily(task.dailyReminderTime!);
+      final due = tz.TZDateTime.from(task.dueDate, tz.local);
+      if (when.isAfter(due)) return;
+      await _zonedScheduleWithFallback(
+        id: task.dailyNotificationId,
+        title: 'Task: ${event.title}',
+        body: '$desc \u2022 due ${_formatDate(task.dueDate)} \u2022 daily reminder',
+        when: when,
+        details: details,
+        matchComponents: DateTimeComponents.time, // repeats daily
+      );
+      return;
+    }
+
+    // BEFORE-EACH-EVENT mode (default).
+    final when =
+        _nextWeekly(event.weekday, event.start, task.reminderMinutesBeforeEvent);
+    final due = tz.TZDateTime.from(task.dueDate, tz.local);
+    if (when.isAfter(due)) return;
+    final body =
+        '$desc \u2022 due ${_formatDate(task.dueDate)} \u2022 for ${event.title}';
+    await _zonedScheduleWithFallback(
+      id: task.notificationId(event.weekday),
+      title: 'Task: ${event.title}',
       body: body,
       when: when,
       details: details,

@@ -129,8 +129,9 @@ class DayListScreenState extends State<DayListScreen> {
 
   Widget _itemCard(
       BuildContext context, ScheduleStore store, ScheduleItem item) {
-    final activeHw =
-        item.type == ItemType.lab ? store.activeHomeworksForLab(item.id) : const [];
+    final activeHw = item.type.carriesHomework
+        ? store.activeHomeworksForLab(item.id)
+        : const [];
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
