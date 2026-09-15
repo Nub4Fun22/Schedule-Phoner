@@ -351,6 +351,11 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
               const Divider(),
               _projectLabHint(),
             ],
+            if (_type == ItemType.event && _isEditing) ...[
+              const SizedBox(height: 8),
+              const Divider(),
+              _eventTaskHint(),
+            ],
           ],
         ),
       ),
@@ -435,6 +440,24 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
             child: Text(
               'Projects should be linked to a lab. You can pick the lab from '
               'the project\'s details screen after saving.',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _eventTaskHint() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, size: 18),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Save this event, then open it from the schedule to add tasks '
+              '(like "do dishes") that remind you before each occurrence.',
             ),
           ),
         ],

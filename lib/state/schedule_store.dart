@@ -15,6 +15,13 @@ class HomeworkWithLab {
   const HomeworkWithLab(this.homework, this.lab);
 }
 
+/// A task paired with its parent Event, for list views.
+class TaskWithEvent {
+  final Task task;
+  final ScheduleItem? event;
+  const TaskWithEvent(this.task, this.event);
+}
+
 /// An upcoming occurrence of an item (for the "What's next" screen).
 class UpcomingOccurrence {
   final ScheduleItem item;
@@ -26,11 +33,13 @@ class UpcomingOccurrence {
 class ScheduleStore extends ChangeNotifier {
   static const String _itemsKey = 'items_v2';
   static const String _homeworkKey = 'homework_v2';
+  static const String _taskKey = 'tasks_v1';
 
   final NotificationService _notifications;
 
   List<ScheduleItem> _items = [];
   List<Homework> _homeworks = [];
+  List<Task> _tasks = [];
   bool _loading = true;
 
   // Notification sound/vibration preferences, mirrored from SettingsStore.
@@ -103,6 +112,24 @@ class ScheduleStore extends ChangeNotifier {
   /// All labs (for linking homework/projects).
   List<ScheduleItem> get labs =>
       _items.where((e) => e.type == ItemType.lab).toList();
+
+  /// All events (for attaching tasks).
+  List<ScheduleItem> get events =>
+      _items.where((e) => e.type == ItemType.event).toList();
+
+  List<Task> get tasks => [..._tasks];
+
+  /// Tasks attached to a given event.
+  List<Task> tasksForEvent(String eventId) =>
+      _tasks.where((t) => t.eventId == eventId).toList();
+
+  /// Active (not done, not past due) tasks for an event.
+  List<Task> activeTasksForEvent(String eventId) {
+    final now = DateTime.now();
+    return _tasks
+        .where((t) => t.eventId == eventId && !t.done && t.dueDate.isAfter(now))
+        .toList();
+  }
 
   ScheduleItem? itemById(String id) {
     for (final e in _items) {
@@ -184,6 +211,16 @@ class ScheduleStore extends ChangeNotifier {
     return list.map((h) => HomeworkWithLab(h, itemById(h.labId))).toList();
   }
 
+  /// Tasks sorted by due date (soonest first). Done ones go last.
+  List<TaskWithEvent> tasksByDueDate({bool includeDone = true}) {
+    final list = _tasks.where((t) => includeDone || !t.done).toList();
+    list.sort((a, b) {
+      if (a.done != b.done) return a.done ? 1 : -1;
+      return a.dueDate.compareTo(b.dueDate);
+    });
+    return list.map((t) => TaskWithEvent(t, itemById(t.eventId))).toList();
+  }
+
   /// Exams sorted by date (soonest first).
   List<ScheduleItem> examsByDate() => _itemsOfTypeByNextOccurrence(ItemType.exam);
 
@@ -235,11 +272,13 @@ class ScheduleStore extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final rawItems = prefs.getString(_itemsKey);
     final rawHw = prefs.getString(_homeworkKey);
+    final rawTasks = prefs.getString(_taskKey);
 
     if (rawItems == null) {
       // Fresh install: empty schedule.
       _items = [];
       _homeworks = [];
+      _tasks = [];
       await _persist();
     } else {
       try {
@@ -260,6 +299,16 @@ class ScheduleStore extends ChangeNotifier {
         debugPrint('Failed to parse homeworks: $e');
         _homeworks = [];
       }
+      try {
+        _tasks = rawTasks == null
+            ? []
+            : (jsonDecode(rawTasks) as List<dynamic>)
+                .map((e) => Task.fromJson(e as Map<String, dynamic>))
+                .toList();
+      } catch (e) {
+        debugPrint('Failed to parse tasks: $e');
+        _tasks = [];
+      }
     }
 
     _loading = false;
@@ -274,6 +323,8 @@ class ScheduleStore extends ChangeNotifier {
         _itemsKey, jsonEncode(_items.map((e) => e.toJson()).toList()));
     await prefs.setString(
         _homeworkKey, jsonEncode(_homeworks.map((e) => e.toJson()).toList()));
+    await prefs.setString(
+        _taskKey, jsonEncode(_tasks.map((e) => e.toJson()).toList()));
   }
 
   Future<void> _rescheduleAll() async {
@@ -284,6 +335,7 @@ class ScheduleStore extends ChangeNotifier {
       await _notifications.rescheduleAll(
         items: _items,
         homeworks: _homeworks,
+        tasks: _tasks,
         sound: _notificationSound,
         vibrate: _notificationVibrate,
       );
@@ -325,8 +377,10 @@ class ScheduleStore extends ChangeNotifier {
 
   Future<void> deleteItem(String id) async {
     _items.removeWhere((e) => e.id == id);
-    // Deleting a lab removes its homeworks (they can't exist without a lab).
+    // Deleting a lab removes its homeworks; deleting an event removes its
+    // tasks (they can't exist without their parent).
     _homeworks.removeWhere((h) => h.labId == id);
+    _tasks.removeWhere((t) => t.eventId == id);
     await _persist();
     notifyListeners();
     await _rescheduleAll();
@@ -384,13 +438,47 @@ class ScheduleStore extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // Task CRUD (tasks attached to Events)
+  // ---------------------------------------------------------------------------
+
+  Future<void> addOrUpdateTask(Task task) async {
+    final i = _tasks.indexWhere((e) => e.id == task.id);
+    if (i >= 0) {
+      _tasks[i] = task;
+    } else {
+      _tasks.add(task);
+    }
+    await _persist();
+    notifyListeners();
+    await _rescheduleAll();
+  }
+
+  Future<void> deleteTask(String id) async {
+    _tasks.removeWhere((e) => e.id == id);
+    await _persist();
+    notifyListeners();
+    await _rescheduleAll();
+  }
+
+  /// Toggle "done" — done stops the recurring reminders.
+  Future<void> setTaskDone(String id, bool done) async {
+    final i = _tasks.indexWhere((e) => e.id == id);
+    if (i < 0) return;
+    _tasks[i] = _tasks[i].copyWith(done: done);
+    await _persist();
+    notifyListeners();
+    await _rescheduleAll();
+  }
+
+  // ---------------------------------------------------------------------------
   // Demo data (optional)
   // ---------------------------------------------------------------------------
 
-  /// True if any demo item/homework is currently present.
+  /// True if any demo item/homework/task is currently present.
   bool get hasDemoData =>
       _items.any((e) => e.id.startsWith(SampleSchedule.demoPrefix)) ||
-      _homeworks.any((h) => h.id.startsWith(SampleSchedule.demoPrefix));
+      _homeworks.any((h) => h.id.startsWith(SampleSchedule.demoPrefix)) ||
+      _tasks.any((t) => t.id.startsWith(SampleSchedule.demoPrefix));
 
   /// Import the demo dataset. Demo items are ADDED alongside the user's own
   /// items (their ids are demo-prefixed), so they can be removed later without
@@ -399,10 +487,12 @@ class ScheduleStore extends ChangeNotifier {
     // Drop any previous demo data first so re-importing doesn't duplicate.
     _items.removeWhere((e) => e.id.startsWith(SampleSchedule.demoPrefix));
     _homeworks.removeWhere((h) => h.id.startsWith(SampleSchedule.demoPrefix));
+    _tasks.removeWhere((t) => t.id.startsWith(SampleSchedule.demoPrefix));
 
     final sample = SampleSchedule.build();
     _items.addAll(sample.items);
     _homeworks.addAll(sample.homeworks);
+    _tasks.addAll(sample.tasks);
     await _persist();
     notifyListeners();
     await _rescheduleAll();
@@ -412,15 +502,17 @@ class ScheduleStore extends ChangeNotifier {
   Future<void> deleteSample() async {
     _items.removeWhere((e) => e.id.startsWith(SampleSchedule.demoPrefix));
     _homeworks.removeWhere((h) => h.id.startsWith(SampleSchedule.demoPrefix));
+    _tasks.removeWhere((t) => t.id.startsWith(SampleSchedule.demoPrefix));
     await _persist();
     notifyListeners();
     await _rescheduleAll();
   }
 
-  /// Wipe EVERYTHING — all items and homework. Settings are unaffected.
+  /// Wipe EVERYTHING — all items, homework and tasks. Settings are unaffected.
   Future<void> deleteAll() async {
     _items = [];
     _homeworks = [];
+    _tasks = [];
     await _persist();
     notifyListeners();
     await _rescheduleAll();

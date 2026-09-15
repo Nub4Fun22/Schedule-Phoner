@@ -14,7 +14,7 @@ class SettingsStore extends ChangeNotifier {
   static const String _kDefaultReminder = 'settings_default_reminder_minutes';
 
   bool _notificationSound = false; // silent by default (per the app spec)
-  bool _vibrate = true;
+  bool _vibrate = false; // vibration OFF by default
   ThemeMode _themeMode = ThemeMode.system;
   bool _showWeekendInGrid = false;
   int _defaultReminderMinutes = 10;
@@ -33,7 +33,7 @@ class SettingsStore extends ChangeNotifier {
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     _notificationSound = prefs.getBool(_kNotificationSound) ?? false;
-    _vibrate = prefs.getBool(_kVibrate) ?? true;
+    _vibrate = prefs.getBool(_kVibrate) ?? false; // OFF by default
     _themeMode = _themeModeFromString(prefs.getString(_kThemeMode));
     _showWeekendInGrid = prefs.getBool(_kShowWeekend) ?? false;
     _defaultReminderMinutes = prefs.getInt(_kDefaultReminder) ?? 10;

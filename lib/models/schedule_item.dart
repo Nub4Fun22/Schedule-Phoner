@@ -87,6 +87,7 @@ enum ItemType {
   project,
   projectPresentation,
   exam,
+  event,
 }
 
 extension ItemTypeX on ItemType {
@@ -107,6 +108,8 @@ extension ItemTypeX on ItemType {
         return 50;
       case ItemType.exam:
         return 60;
+      case ItemType.event:
+        return 5; // personal reminder — below academic items
     }
   }
 
@@ -124,6 +127,8 @@ extension ItemTypeX on ItemType {
         return 'Project presentation';
       case ItemType.exam:
         return 'Exam';
+      case ItemType.event:
+        return 'Event';
     }
   }
 
@@ -141,6 +146,8 @@ extension ItemTypeX on ItemType {
         return Icons.co_present_outlined;
       case ItemType.exam:
         return Icons.emoji_events_outlined;
+      case ItemType.event:
+        return Icons.event_note_outlined;
     }
   }
 
@@ -153,10 +160,17 @@ extension ItemTypeX on ItemType {
 
   /// Whether this type can be either one-time or weekly (user chooses).
   bool get supportsBothModes =>
-      this == ItemType.test || this == ItemType.project;
+      this == ItemType.test ||
+      this == ItemType.project ||
+      this == ItemType.event;
 
   /// Whether this type must be linked to a specific Lab.
   bool get requiresLabLink => this == ItemType.project;
+
+  /// Whether this type can carry attached "tasks" (like a Lab carries homework,
+  /// an Event carries tasks). Only weekly instances get recurring task
+  /// reminders; the editor guides the user accordingly.
+  bool get canCarryTasks => this == ItemType.event;
 
   String get storageKey => name;
 
@@ -241,6 +255,85 @@ class Homework {
   /// Stable notification id namespace for homework-before-lab reminders.
   int notificationId(int weekdayOccurrence) =>
       ('hw_$id\_$weekdayOccurrence').hashCode & 0x7FFFFFFF;
+}
+
+// ============================================================================
+// Task — a sub-entity attached to an Event (the personal-reminder analogue of
+// Homework attached to a Lab). E.g. Event "Chores" with a Task "do dishes".
+// ============================================================================
+
+/// Priority shared by Tasks (mirrors the Event's low personal priority).
+const int kTaskPriority = 5;
+
+class Task {
+  final String id;
+
+  /// The Event item this task belongs to. A task can't exist without it.
+  final String eventId;
+
+  /// Optional free text describing the task.
+  final String description;
+
+  /// When it's due.
+  final DateTime dueDate;
+
+  /// Whether the user has marked it done (stops recurring reminders).
+  final bool done;
+
+  /// Minutes before each event occurrence to remind. Default = 1 day.
+  final int reminderMinutesBeforeEvent;
+
+  const Task({
+    required this.id,
+    required this.eventId,
+    this.description = '',
+    required this.dueDate,
+    this.done = false,
+    this.reminderMinutesBeforeEvent = 24 * 60,
+  });
+
+  int get priority => kTaskPriority;
+
+  bool get isOverdue => !done && dueDate.isBefore(DateTime.now());
+
+  Task copyWith({
+    String? description,
+    DateTime? dueDate,
+    bool? done,
+    int? reminderMinutesBeforeEvent,
+  }) =>
+      Task(
+        id: id,
+        eventId: eventId,
+        description: description ?? this.description,
+        dueDate: dueDate ?? this.dueDate,
+        done: done ?? this.done,
+        reminderMinutesBeforeEvent:
+            reminderMinutesBeforeEvent ?? this.reminderMinutesBeforeEvent,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'eventId': eventId,
+        'description': description,
+        'dueDate': dueDate.toIso8601String(),
+        'done': done,
+        'reminderMinutesBeforeEvent': reminderMinutesBeforeEvent,
+      };
+
+  factory Task.fromJson(Map<String, dynamic> j) => Task(
+        id: j['id'] as String,
+        eventId: j['eventId'] as String,
+        description: (j['description'] ?? '') as String,
+        dueDate: DateTime.parse(j['dueDate'] as String),
+        done: (j['done'] ?? false) as bool,
+        reminderMinutesBeforeEvent:
+            (j['reminderMinutesBeforeEvent'] ?? 24 * 60) as int,
+      );
+
+  /// Stable notification id namespace for task-before-event reminders.
+  int notificationId(int weekdayOccurrence) =>
+      ('task_$id\_$weekdayOccurrence').hashCode & 0x7FFFFFFF;
 }
 
 // ============================================================================
