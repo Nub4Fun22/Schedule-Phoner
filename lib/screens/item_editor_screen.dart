@@ -246,7 +246,7 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final t in ItemType.values)
+                for (final t in ItemTypeX.displayOrder)
                   ChoiceChip(
                     avatar: Icon(t.icon, size: 18),
                     label: Text(t.label),

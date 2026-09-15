@@ -4,14 +4,14 @@ import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
-import android.content.Intent
+import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetPlugin
 
 /**
- * 3x1 home-screen widget that shows the next Course/Lab/Test/Exam.
- * Data is written from Flutter via HomeWidget.saveWidgetData(...) and read here
- * from the plugin's SharedPreferences.
+ * 4x2 home-screen widget that shows the next Course/Lab/Test/Exam with a
+ * countdown, plus the item after it ("UP NEXT"). Data is written from Flutter
+ * via HomeWidget.saveWidgetData(...) and read here from SharedPreferences.
  */
 class NextItemWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(
@@ -20,11 +20,13 @@ class NextItemWidgetProvider : AppWidgetProvider() {
         appWidgetIds: IntArray
     ) {
         val prefs = HomeWidgetPlugin.getData(context)
+        val typeLabel = prefs.getString("next_type", null) ?: "Schedule Phoner"
         val title = prefs.getString("next_title", null) ?: "No upcoming items"
         val subtitle = prefs.getString("next_subtitle", null) ?: "Open the app to add some"
-        val typeLabel = prefs.getString("next_type", null) ?: "Schedule Phoner"
         val countdown = prefs.getString("next_countdown", null) ?: ""
-        val following = prefs.getString("following", null) ?: ""
+        val followingLabel = prefs.getString("following_label", null) ?: ""
+        val followingTitle = prefs.getString("following_title", null) ?: ""
+        val followingSub = prefs.getString("following_sub", null) ?: ""
 
         for (widgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.next_item_widget)
@@ -32,19 +34,24 @@ class NextItemWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_title, title)
             views.setTextViewText(R.id.widget_subtitle, subtitle)
 
-            // Countdown ("in 2h 15m"). Hide the view when there's nothing.
             views.setTextViewText(R.id.widget_countdown, countdown)
             views.setViewVisibility(
                 R.id.widget_countdown,
-                if (countdown.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
+                if (countdown.isEmpty()) View.GONE else View.VISIBLE
             )
 
-            // "Next: ..." second upcoming item. Hidden when empty.
-            views.setTextViewText(R.id.widget_following, following)
-            views.setViewVisibility(
-                R.id.widget_following,
-                if (following.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
-            )
+            // Secondary "UP NEXT" block — show all three parts together, or
+            // hide them (and the divider) when there's no second item.
+            val hasFollowing = followingTitle.isNotEmpty()
+            val vis = if (hasFollowing) View.VISIBLE else View.GONE
+            views.setTextViewText(R.id.widget_following_label,
+                if (followingLabel.isEmpty()) "UP NEXT" else followingLabel)
+            views.setTextViewText(R.id.widget_following_title, followingTitle)
+            views.setTextViewText(R.id.widget_following_sub, followingSub)
+            views.setViewVisibility(R.id.widget_following_label, vis)
+            views.setViewVisibility(R.id.widget_following_title, vis)
+            views.setViewVisibility(R.id.widget_following_sub, vis)
+            views.setViewVisibility(R.id.widget_divider, vis)
 
             // Tapping the widget opens the app.
             val launchIntent = context.packageManager

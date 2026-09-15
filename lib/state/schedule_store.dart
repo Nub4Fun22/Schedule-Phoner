@@ -187,12 +187,13 @@ class ScheduleStore extends ChangeNotifier {
     return list.isEmpty ? null : list.first;
   }
 
-  /// Upcoming Course/Lab/Test/Exam occurrences for the home-screen widget
-  /// (the "next up" row shows the second entry).
+  /// Upcoming Course/Lab/Seminar/Test/Exam occurrences for the home-screen
+  /// widget (the "UP NEXT" block shows the second entry).
   List<UpcomingOccurrence> widgetUpcoming({int limit = 2}) {
     return upcoming(types: {
       ItemType.course,
       ItemType.lab,
+      ItemType.seminar,
       ItemType.test,
       ItemType.exam,
     }, limit: limit);

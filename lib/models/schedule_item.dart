@@ -191,6 +191,20 @@ extension ItemTypeX on ItemType {
   static ItemType fromKey(String key) =>
       ItemType.values.firstWhere((e) => e.name == key,
           orElse: () => ItemType.course);
+
+  /// The order types are shown in the editor's type picker. Kept separate from
+  /// the enum declaration order (which storage relies on) so we can reorder the
+  /// UI freely. Seminar sits right after Lab since they're 1:1.
+  static const List<ItemType> displayOrder = [
+    ItemType.course,
+    ItemType.lab,
+    ItemType.seminar,
+    ItemType.test,
+    ItemType.project,
+    ItemType.projectPresentation,
+    ItemType.exam,
+    ItemType.event,
+  ];
 }
 
 /// Priority shared by Homework (mirrors Project's priority).
