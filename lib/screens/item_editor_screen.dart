@@ -5,6 +5,7 @@ import '../models/schedule_item.dart';
 import '../state/schedule_store.dart';
 import '../state/settings_store.dart';
 import '../widgets/color_utils.dart';
+import '../widgets/date_format_utils.dart';
 import 'homework_task_dialog.dart';
 
 /// Result returned when an item is saved, so callers can show confirmation.
@@ -496,8 +497,7 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
   }
 
   String _subItemSubtitle(ReminderConfig c) {
-    final due =
-        '${c.dueDate.day.toString().padLeft(2, '0')}/${c.dueDate.month.toString().padLeft(2, '0')}';
+    final due = DateFormatUtils.dueWithCountdown(c.dueDate);
     if (c.dailyUntil && c.dailyTime != null) {
       return 'Due $due • daily at ${c.dailyTime!.format()}';
     }

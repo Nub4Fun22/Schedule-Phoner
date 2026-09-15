@@ -5,6 +5,7 @@ import '../models/schedule_item.dart';
 import '../services/notification_service.dart';
 import '../state/schedule_store.dart';
 import '../widgets/color_utils.dart';
+import '../widgets/date_format_utils.dart';
 import 'homework_task_dialog.dart';
 import 'item_editor_screen.dart';
 
@@ -157,7 +158,7 @@ class ItemDetailsScreen extends StatelessWidget {
                 decoration: hw.done ? TextDecoration.lineThrough : null,
               ),
             ),
-            subtitle: Text('Due ${_fmtDate(hw.dueDate)}'
+            subtitle: Text('Due ${DateFormatUtils.dueWithCountdown(hw.dueDate)}'
                 '${hw.isOverdue ? ' • OVERDUE' : ''}'),
             trailing: PopupMenuButton<String>(
               onSelected: (v) {
@@ -253,7 +254,7 @@ class ItemDetailsScreen extends StatelessWidget {
                 decoration: t.done ? TextDecoration.lineThrough : null,
               ),
             ),
-            subtitle: Text('Due ${_fmtDate(t.dueDate)}'
+            subtitle: Text('Due ${DateFormatUtils.dueWithCountdown(t.dueDate)}'
                 '${t.isOverdue ? ' • OVERDUE' : ''}'),
             trailing: PopupMenuButton<String>(
               onSelected: (v) {
@@ -328,7 +329,4 @@ class ItemDetailsScreen extends StatelessWidget {
       if (context.mounted) Navigator.of(context).pop();
     }
   }
-
-  static String _fmtDate(DateTime d) =>
-      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 }

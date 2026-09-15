@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/schedule_item.dart';
+import '../widgets/date_format_utils.dart';
 
 /// Reminder configuration shared by homework (attached to a lab/seminar) and
 /// tasks (attached to an event). Supports two modes:
@@ -109,8 +110,7 @@ class _ReminderDialogState extends State<ReminderDialog> {
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.event),
               title: const Text('Due date'),
-              subtitle: Text(
-                  '${_due.day.toString().padLeft(2, '0')}/${_due.month.toString().padLeft(2, '0')}/${_due.year}'),
+              subtitle: Text(DateFormatUtils.dueWithCountdown(_due)),
               onTap: () async {
                 final now = DateTime.now();
                 final picked = await showDatePicker(

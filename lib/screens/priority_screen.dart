@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/schedule_item.dart';
 import '../state/schedule_store.dart';
+import '../widgets/date_format_utils.dart';
 import 'item_details_screen.dart';
 
 /// Priority view — a vertical, priority-ordered split screen. From top to
@@ -76,7 +77,8 @@ class _HomeworkHalf extends StatelessWidget {
                           ),
                         ),
                         subtitle: Text(
-                          '${lab?.title ?? 'Lab'} • due ${_fmt(hw.dueDate)}'
+                          '${lab?.title ?? 'Lab'} • due '
+                          '${DateFormatUtils.dueWithCountdown(hw.dueDate)}'
                           '${hw.isOverdue ? ' • OVERDUE' : ''}',
                           style: TextStyle(
                             color: hw.isOverdue
@@ -120,9 +122,6 @@ class _HomeworkHalf extends StatelessWidget {
                 : Theme.of(context).colorScheme.primary,
             fontWeight: FontWeight.w700));
   }
-
-  static String _fmt(DateTime d) =>
-      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
 }
 
 // ---------------------------------------------------------------------------
@@ -267,12 +266,8 @@ class _ItemSection extends StatelessWidget {
     final now = DateTime.now();
     final when = item.nextOccurrence(now);
     if (when == null) return '';
-    final days = DateTime(when.year, when.month, when.day)
-        .difference(DateTime(now.year, now.month, now.day))
-        .inDays;
-    if (days == 0) return 'today';
-    if (days == 1) return 'tomorrow';
-    return 'in ${days}d';
+    // when includes the item's start time, so same-day shows hours/minutes.
+    return DateFormatUtils.untilLabel(when, from: now);
   }
 }
 
