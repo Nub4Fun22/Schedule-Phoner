@@ -519,4 +519,74 @@ class ScheduleStore extends ChangeNotifier {
     notifyListeners();
     await _rescheduleAll();
   }
+
+  // ---------------------------------------------------------------------------
+  // Import / Export
+  // ---------------------------------------------------------------------------
+
+  /// Current schema version for exported files.
+  static const int _exportVersion = 1;
+
+  /// Serialize the whole schedule (items + homework + tasks) to a pretty JSON
+  /// string that can be saved/shared and re-imported later.
+  String exportToJson() {
+    final map = <String, dynamic>{
+      'app': 'schedule_phoner',
+      'version': _exportVersion,
+      'exportedAt': DateTime.now().toIso8601String(),
+      'items': _items.map((e) => e.toJson()).toList(),
+      'homework': _homeworks.map((e) => e.toJson()).toList(),
+      'tasks': _tasks.map((e) => e.toJson()).toList(),
+    };
+    return const JsonEncoder.withIndent('  ').convert(map);
+  }
+
+  /// Result of an import attempt.
+  int get itemCount => _items.length;
+
+  /// Replace the current schedule with the contents of [jsonString].
+  /// Returns the number of items imported. Throws [FormatException] if the
+  /// file isn't a valid Schedule Phoner export.
+  Future<int> importFromJson(String jsonString) async {
+    final dynamic decoded = jsonDecode(jsonString);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('Not a valid schedule file.');
+    }
+    if (decoded['app'] != 'schedule_phoner') {
+      throw const FormatException(
+          'This file was not exported from Schedule Phoner.');
+    }
+
+    final newItems = <ScheduleItem>[];
+    final newHomeworks = <Homework>[];
+    final newTasks = <Task>[];
+
+    final itemsRaw = decoded['items'];
+    if (itemsRaw is List) {
+      for (final e in itemsRaw) {
+        newItems.add(ScheduleItem.fromJson(e as Map<String, dynamic>));
+      }
+    }
+    final hwRaw = decoded['homework'];
+    if (hwRaw is List) {
+      for (final e in hwRaw) {
+        newHomeworks.add(Homework.fromJson(e as Map<String, dynamic>));
+      }
+    }
+    final tasksRaw = decoded['tasks'];
+    if (tasksRaw is List) {
+      for (final e in tasksRaw) {
+        newTasks.add(Task.fromJson(e as Map<String, dynamic>));
+      }
+    }
+
+    // Only commit once everything parsed successfully (all-or-nothing).
+    _items = newItems;
+    _homeworks = newHomeworks;
+    _tasks = newTasks;
+    await _persist();
+    notifyListeners();
+    await _rescheduleAll();
+    return _items.length;
+  }
 }

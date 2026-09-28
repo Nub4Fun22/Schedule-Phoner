@@ -36,16 +36,24 @@ class WidgetService {
         await HomeWidget.saveWidgetData<String>(
             'next_subtitle', 'Open the app to add some');
         await HomeWidget.saveWidgetData<String>('next_countdown', '');
+        await HomeWidget.saveWidgetData<String>('next_epoch', '');
         await HomeWidget.saveWidgetData<String>('following_label', '');
         await HomeWidget.saveWidgetData<String>('following_title', '');
         await HomeWidget.saveWidgetData<String>('following_sub', '');
+        await HomeWidget.saveWidgetData<String>('following_prefix', '');
+        await HomeWidget.saveWidgetData<String>('following_epoch', '');
       } else {
         await HomeWidget.saveWidgetData<String>('next_type', item.type.label);
         await HomeWidget.saveWidgetData<String>('next_title', item.title);
         await HomeWidget.saveWidgetData<String>(
             'next_subtitle', _subtitle(item, occurrenceWhen));
+        // Countdown text is a fallback; the native widget recomputes it live
+        // from next_epoch on every (periodic) update so it stays fresh without
+        // opening the app.
         await HomeWidget.saveWidgetData<String>(
             'next_countdown', _countdown(occurrenceWhen));
+        await HomeWidget.saveWidgetData<String>(
+            'next_epoch', occurrenceWhen.millisecondsSinceEpoch.toString());
 
         if (following != null && followingWhen != null) {
           await HomeWidget.saveWidgetData<String>('following_label', 'UP NEXT');
@@ -53,10 +61,17 @@ class WidgetService {
               'following_title', '${following.type.label}: ${following.title}');
           await HomeWidget.saveWidgetData<String>(
               'following_sub', _followingSub(following, followingWhen));
+          // Day/time prefix without the countdown; native appends live time.
+          await HomeWidget.saveWidgetData<String>(
+              'following_prefix', _followingPrefix(following, followingWhen));
+          await HomeWidget.saveWidgetData<String>('following_epoch',
+              followingWhen.millisecondsSinceEpoch.toString());
         } else {
           await HomeWidget.saveWidgetData<String>('following_label', '');
           await HomeWidget.saveWidgetData<String>('following_title', '');
           await HomeWidget.saveWidgetData<String>('following_sub', '');
+          await HomeWidget.saveWidgetData<String>('following_prefix', '');
+          await HomeWidget.saveWidgetData<String>('following_epoch', '');
         }
       }
       await HomeWidget.updateWidget(name: _androidProvider);
@@ -75,6 +90,11 @@ class WidgetService {
   /// "Wed • 10:00 • in 1d 2h" for the second (following) item.
   String _followingSub(ScheduleItem item, DateTime when) {
     return '${_dayLabel(when)} • ${item.start.format()} • ${_countdown(when)}';
+  }
+
+  /// "Wed • 10:00 • " — the native widget appends a live countdown after this.
+  String _followingPrefix(ScheduleItem item, DateTime when) {
+    return '${_dayLabel(when)} • ${item.start.format()} • ';
   }
 
   String _dayLabel(DateTime when) {

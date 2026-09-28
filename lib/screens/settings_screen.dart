@@ -1,5 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../services/notification_service.dart';
 import '../state/schedule_store.dart';
@@ -124,6 +130,24 @@ class SettingsScreen extends StatelessWidget {
             subtitle: const Text('Include Saturday & Sunday columns'),
             value: settings.showWeekendInGrid,
             onChanged: (val) => settings.setShowWeekendInGrid(val),
+          ),
+
+          const Divider(),
+          _sectionHeader(context, 'Backup & restore'),
+
+          ListTile(
+            leading: const Icon(Icons.ios_share_outlined),
+            title: const Text('Export schedule'),
+            subtitle: const Text(
+                'Save/share a backup file of all your items, homework and tasks'),
+            onTap: () => _exportSchedule(context, store),
+          ),
+          ListTile(
+            leading: const Icon(Icons.file_download_outlined),
+            title: const Text('Import schedule'),
+            subtitle: const Text(
+                'Load a backup file. Replaces your current schedule.'),
+            onTap: () => _importSchedule(context, store),
           ),
 
           const Divider(),
@@ -272,6 +296,95 @@ class SettingsScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  // ---- Backup & restore ---------------------------------------------------
+
+  Future<void> _exportSchedule(
+      BuildContext context, ScheduleStore store) async {
+    try {
+      final json = store.exportToJson();
+      final dir = await getTemporaryDirectory();
+      final stamp = DateTime.now()
+          .toIso8601String()
+          .replaceAll(':', '-')
+          .split('.')
+          .first;
+      final file = File('${dir.path}/schedule-phoner-backup-$stamp.json');
+      await file.writeAsString(json);
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'application/json')],
+        subject: 'Schedule Phoner backup',
+        text: 'My Schedule Phoner backup',
+      );
+    } catch (e) {
+      if (context.mounted) _snack(context, 'Export failed: $e');
+    }
+  }
+
+  Future<void> _importSchedule(
+      BuildContext context, ScheduleStore store) async {
+    // Confirm first — importing replaces the current schedule.
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Import schedule?'),
+        content: const Text(
+            'This replaces your current items, homework and tasks with the '
+            'contents of the backup file. Consider exporting first.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Choose file')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) return; // cancelled
+
+      final picked = result.files.first;
+      String content;
+      if (picked.bytes != null) {
+        content = utf8.decode(picked.bytes!);
+      } else if (picked.path != null) {
+        content = await File(picked.path!).readAsString();
+      } else {
+        if (context.mounted) _snack(context, 'Could not read the file.');
+        return;
+      }
+
+      final count = await store.importFromJson(content);
+      if (context.mounted) {
+        _snack(context, 'Imported $count item${count == 1 ? '' : 's'}');
+      }
+    } on FormatException catch (e) {
+      if (context.mounted) {
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            icon: const Icon(Icons.error_outline),
+            title: const Text('Import failed'),
+            content: Text(e.message),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('OK')),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) _snack(context, 'Import failed: $e');
+    }
   }
 
   Future<void> _confirmDeleteAll(
