@@ -185,6 +185,42 @@ jobs:
             echo "Relabelled app in $m"
           fi
 
+      - name: Sign release with the stable keystore
+        # IMPORTANT: this is what makes app updates install in place without
+        # wiping data. Every build is signed with ONE committed keystore
+        # (android_overlay/app/schedule-phoner-release.jks, copied into
+        # android/app/ by the overlay step) instead of Flutter's per-machine
+        # debug key. Note: the keystore + password are in the repo, so this is
+        # NOT Play-Store-grade secrecy — it's the pragmatic choice for a
+        # personally sideloaded app so updates stop breaking. For a Play
+        # release, swap to a secret keystore via GitHub Secrets.
+        run: |
+          set -e
+          f=android/app/build.gradle
+          if [ -f "$f" ]; then
+            {
+              printf '\n'
+              printf '// Injected by CI: stable release signing so updates preserve data.\n'
+              printf 'android {\n'
+              printf '    signingConfigs {\n'
+              printf '        stable {\n'
+              printf '            storeFile file("schedule-phoner-release.jks")\n'
+              printf '            storePassword "schedulephoner"\n'
+              printf '            keyAlias "schedulephoner"\n'
+              printf '            keyPassword "schedulephoner"\n'
+              printf '        }\n'
+              printf '    }\n'
+              printf '    buildTypes {\n'
+              printf '        release {\n'
+              printf '            signingConfig signingConfigs.stable\n'
+              printf '        }\n'
+              printf '    }\n'
+              printf '}\n'
+            } >> "$f"
+            echo "Appended stable signingConfig to $f"
+            tail -18 "$f"
+          fi
+
       - name: Build release APK
         run: flutter build apk --release
 
