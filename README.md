@@ -31,6 +31,8 @@ A clean Flutter timetable app for your school schedule. **Android now, iOS later
   from the item's details screen.
 - **Flexible reminders** for homework/tasks — either **before each occurrence**
   of the lab/event, or **"alert me every day until then"** at a chosen hour.
+- **Custom reminder lead times** — pick any hours + minutes (e.g. **1h 30m**),
+  not just fixed presets, for an item's own reminder and for homework/tasks.
 - **Four views** (bottom navigation):
   - **Grid** — Excel-like weekly grid of recurring items (weekend shown by
     default). Also surfaces one-time items falling in the current week.
@@ -47,10 +49,16 @@ A clean Flutter timetable app for your school schedule. **Android now, iOS later
   you toggle **sound** and **vibration** (both off by default), send **test
   notifications**, set a default reminder lead time, choose the **theme**
   (system/light/dark), show the **weekend** in the grid, import/delete demo
-  data, and **delete everything** (with confirmation).
+  data, **export / import** your schedule, and **delete everything** (with
+  confirmation).
+- **Backup & restore** — **export** your whole schedule (items + homework +
+  tasks) to a JSON file (save to the device or share it), and **import** it
+  back later. Great before switching phones or reinstalling.
 - **Home-screen widget (Android)** — a **4×2** widget showing your next
   Course / Lab / Seminar / Test / Exam with a **countdown**, plus the item
-  after it with its own time. Tap it to open the app.
+  after it with its own time. It **auto-refreshes** (and on reboot) so the
+  countdown stays current without opening the app, and has a **↻ refresh
+  button** for an instant update. Tap the body to open the app.
 - **Burning-calendar app icon.**
 - **Data saved on device**; **light & dark** themes.
 
@@ -95,7 +103,13 @@ android_overlay/app/src/main/
   res/xml/next_item_widget_info.xml            Widget config (4×2)
   res/drawable/widget_background.xml           Widget background
   proguard-rules.pro                           Keep rules for flutter_local_notifications
+  schedule-phoner-release.jks                  Stable signing key (see note below)
 ```
+
+> **Signing note:** builds are signed with a committed release keystore so
+> sideloaded **updates install in place and preserve data**. Because the
+> keystore + password live in the repo, this is *not* Play-Store-grade key
+> secrecy — for a Play release, move the keystore into GitHub Secrets.
 
 ## Requirements
 
@@ -120,7 +134,10 @@ publishes a downloadable Android file on the **Releases** page.
 
 > The APK on the **latest** release is rebuilt **automatically every time the
 > code is updated** (any push to `main`), so it always has the newest fixes and
-> features. Just re-download and reinstall to update.
+> features. Just re-download and install over the top to update — builds are
+> signed with a **stable key**, so updates install in place and **keep your
+> schedule** (no uninstall needed). Tip: use **Settings → Export** to keep a
+> backup before big changes anyway.
 >
 > Pushing a version tag also creates a permanent, versioned release:
 > ```bash
