@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/schedule_item.dart';
 import '../widgets/date_format_utils.dart';
+import '../widgets/lead_time_picker.dart';
 
 /// Reminder configuration shared by homework (attached to a lab/seminar) and
 /// tasks (attached to an event). Supports two modes:
@@ -51,15 +52,6 @@ class _ReminderDialogState extends State<ReminderDialog> {
   late bool _daily;
   late TimeOfDay _dailyTime;
 
-  static const List<int> _leadOptions = [
-    0,
-    60,
-    2 * 60,
-    12 * 60,
-    24 * 60,
-    48 * 60,
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -80,12 +72,8 @@ class _ReminderDialogState extends State<ReminderDialog> {
   }
 
   String _leadLabel(int m) {
-    final p = widget.parentLabel;
-    if (m == 0) return 'At $p time';
-    if (m == 24 * 60) return '1 day before $p';
-    if (m == 48 * 60) return '2 days before $p';
-    if (m >= 60) return '${m ~/ 60}h before $p';
-    return '$m min before $p';
+    if (m == 0) return 'At ${widget.parentLabel} time';
+    return LeadTime.label(m, suffix: 'before ${widget.parentLabel}');
   }
 
   String _fmtTime(TimeOfDay t) =>
@@ -146,14 +134,16 @@ class _ReminderDialogState extends State<ReminderDialog> {
                 },
               )
             else
-              DropdownButtonFormField<int>(
-                value: _leadOptions.contains(_lead) ? _lead : 24 * 60,
-                decoration: const InputDecoration(labelText: 'Remind me'),
-                items: [
-                  for (final m in _leadOptions)
-                    DropdownMenuItem(value: m, child: Text(_leadLabel(m))),
-                ],
-                onChanged: (m) => setState(() => _lead = m ?? 24 * 60),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.notifications_active_outlined),
+                title: const Text('Remind me'),
+                subtitle: Text(_leadLabel(_lead)),
+                trailing: const Icon(Icons.edit_outlined),
+                onTap: () async {
+                  final picked = await LeadTime.pick(context, _lead);
+                  if (picked != null) setState(() => _lead = picked);
+                },
               ),
           ],
         ),

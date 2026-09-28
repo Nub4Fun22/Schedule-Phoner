@@ -6,6 +6,7 @@ import '../state/schedule_store.dart';
 import '../state/settings_store.dart';
 import '../widgets/color_utils.dart';
 import '../widgets/date_format_utils.dart';
+import '../widgets/lead_time_picker.dart';
 import 'homework_task_dialog.dart';
 
 /// Result returned when an item is saved, so callers can show confirmation.
@@ -54,8 +55,6 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
   /// Word for the sub-item given the current type.
   String get _subItemNoun => _type == ItemType.event ? 'task' : 'homework';
 
-  static const List<int> _leadOptions = [0, 5, 10, 15, 30, 60, 120, 24 * 60];
-
   @override
   void initState() {
     super.initState();
@@ -84,7 +83,7 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
     if (!_isEditing && !_appliedDefaultReminder) {
       _appliedDefaultReminder = true;
       final def = context.read<SettingsStore>().defaultReminderMinutes;
-      if (_leadOptions.contains(def)) {
+      if (def >= 0) {
         setState(() => _reminderMinutes = def);
       }
     }
@@ -219,12 +218,7 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
   void _snack(String msg) => ScaffoldMessenger.of(context)
       .showSnackBar(SnackBar(content: Text(msg)));
 
-  String _leadLabel(int m) {
-    if (m == 0) return 'At start';
-    if (m == 24 * 60) return '1 day';
-    if (m >= 60) return '${m ~/ 60}h';
-    return '$m min';
-  }
+  String _leadLabel(int m) => LeadTime.label(m);
 
   @override
   Widget build(BuildContext context) {
@@ -357,20 +351,23 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Reminder lead time
-            DropdownButtonFormField<int>(
-              value: _leadOptions.contains(_reminderMinutes)
-                  ? _reminderMinutes
-                  : 10,
-              decoration: const InputDecoration(
-                labelText: 'Remind me before',
-                prefixIcon: Icon(Icons.notifications_active_outlined),
+            // Reminder lead time (any hours + minutes, e.g. 1h 30m)
+            InkWell(
+              onTap: () async {
+                final picked =
+                    await LeadTime.pick(context, _reminderMinutes);
+                if (picked != null) {
+                  setState(() => _reminderMinutes = picked);
+                }
+              },
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Remind me before',
+                  prefixIcon: Icon(Icons.notifications_active_outlined),
+                  suffixIcon: Icon(Icons.edit_outlined),
+                ),
+                child: Text(_leadLabel(_reminderMinutes)),
               ),
-              items: [
-                for (final m in _leadOptions)
-                  DropdownMenuItem(value: m, child: Text(_leadLabel(m))),
-              ],
-              onChanged: (m) => setState(() => _reminderMinutes = m ?? 10),
             ),
             const SizedBox(height: 20),
 

@@ -10,13 +10,12 @@ import 'package:share_plus/share_plus.dart';
 import '../services/notification_service.dart';
 import '../state/schedule_store.dart';
 import '../state/settings_store.dart';
+import '../widgets/lead_time_picker.dart';
 
 /// A full settings screen: notification behavior, appearance, demo data and
 /// destructive data actions (delete demo / delete everything).
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
-
-  static const List<int> _reminderOptions = [0, 5, 10, 15, 30, 60, 120, 24 * 60];
 
   @override
   Widget build(BuildContext context) {
@@ -77,18 +76,14 @@ class SettingsScreen extends StatelessWidget {
             title: const Text('Default reminder time'),
             subtitle: Text('New items remind '
                 '${_reminderLabel(settings.defaultReminderMinutes)} by default'),
-            trailing: DropdownButton<int>(
-              value: _reminderOptions.contains(settings.defaultReminderMinutes)
-                  ? settings.defaultReminderMinutes
-                  : 10,
-              underline: const SizedBox.shrink(),
-              items: [
-                for (final m in _reminderOptions)
-                  DropdownMenuItem(value: m, child: Text(_reminderLabel(m))),
-              ],
-              onChanged: (m) =>
-                  settings.setDefaultReminderMinutes(m ?? 10),
-            ),
+            trailing: const Icon(Icons.edit_outlined),
+            onTap: () async {
+              final picked = await LeadTime.pick(
+                  context, settings.defaultReminderMinutes);
+              if (picked != null) {
+                await settings.setDefaultReminderMinutes(picked);
+              }
+            },
           ),
           ListTile(
             leading: const Icon(Icons.notification_add_outlined),
@@ -427,12 +422,8 @@ class SettingsScreen extends StatelessWidget {
       ));
   }
 
-  static String _reminderLabel(int m) {
-    if (m == 0) return 'at start';
-    if (m == 24 * 60) return '1 day before';
-    if (m >= 60) return '${m ~/ 60}h before';
-    return '$m min before';
-  }
+  static String _reminderLabel(int m) =>
+      m <= 0 ? 'at start' : LeadTime.label(m, suffix: 'before');
 
   static String _themeLabel(ThemeMode mode) {
     switch (mode) {
