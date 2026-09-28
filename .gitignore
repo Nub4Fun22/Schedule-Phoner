@@ -43,6 +43,9 @@ app.*.map.json
 **/android/**/GeneratedPluginRegistrant.java
 **/android/key.properties
 *.jks
+# ...except the committed stable release keystore used by CI so sideloaded
+# updates preserve data (see build-release.yml). Not Play-Store secret.
+!android_overlay/app/schedule-phoner-release.jks
 
 # iOS/macOS related
 **/ios/**/*.mode1v3
