@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -134,7 +135,8 @@ class SettingsScreen extends StatelessWidget {
             leading: const Icon(Icons.ios_share_outlined),
             title: const Text('Export schedule'),
             subtitle: const Text(
-                'Save/share a backup file of all your items, homework and tasks'),
+                'Save to your device or share a backup of all your items, '
+                'homework and tasks'),
             onTap: () => _exportSchedule(context, store),
           ),
           ListTile(
@@ -297,21 +299,62 @@ class SettingsScreen extends StatelessWidget {
 
   Future<void> _exportSchedule(
       BuildContext context, ScheduleStore store) async {
+    // Let the user choose: save directly to the device (Downloads/anywhere via
+    // the system file dialog) or share to another app.
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.download_outlined),
+              title: const Text('Save to device'),
+              subtitle: const Text('Pick a folder (e.g. Downloads)'),
+              onTap: () => Navigator.of(ctx).pop('save'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.share_outlined),
+              title: const Text('Share'),
+              subtitle: const Text('Send to Drive, email, etc.'),
+              onTap: () => Navigator.of(ctx).pop('share'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null) return;
+
     try {
       final json = store.exportToJson();
-      final dir = await getTemporaryDirectory();
       final stamp = DateTime.now()
           .toIso8601String()
           .replaceAll(':', '-')
           .split('.')
           .first;
-      final file = File('${dir.path}/schedule-phoner-backup-$stamp.json');
-      await file.writeAsString(json);
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'application/json')],
-        subject: 'Schedule Phoner backup',
-        text: 'My Schedule Phoner backup',
-      );
+      final fileName = 'schedule-phoner-backup-$stamp.json';
+
+      if (choice == 'save') {
+        // Native "save to..." dialog (Storage Access Framework on Android).
+        final savedPath = await FilePicker.platform.saveFile(
+          dialogTitle: 'Save schedule backup',
+          fileName: fileName,
+          bytes: Uint8List.fromList(utf8.encode(json)),
+        );
+        if (context.mounted) {
+          _snack(
+              context, savedPath == null ? 'Save cancelled' : 'Saved backup');
+        }
+      } else {
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/$fileName');
+        await file.writeAsString(json);
+        await Share.shareXFiles(
+          [XFile(file.path, mimeType: 'application/json')],
+          subject: 'Schedule Phoner backup',
+          text: 'My Schedule Phoner backup',
+        );
+      }
     } catch (e) {
       if (context.mounted) _snack(context, 'Export failed: $e');
     }
