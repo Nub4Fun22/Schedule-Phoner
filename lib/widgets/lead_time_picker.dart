@@ -67,52 +67,52 @@ class _LeadTimePickerDialogState extends State<_LeadTimePickerDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Remind me before'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+      content: SizedBox(
+        width: double.maxFinite,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _stepper(
+              _stepperRow(
                 label: 'Hours',
                 value: _hours,
                 max: 168, // up to a week
                 onChanged: (v) => setState(() => _hours = v),
               ),
-              const SizedBox(width: 20),
-              _stepper(
+              const SizedBox(height: 4),
+              _stepperRow(
                 label: 'Minutes',
                 value: _minutes,
                 max: 59,
                 step: 5,
                 onChanged: (v) => setState(() => _minutes = v),
               ),
+              const SizedBox(height: 12),
+              Text(
+                _total <= 0 ? 'At start time' : LeadTime.label(_total),
+                textAlign: TextAlign.center,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                alignment: WrapAlignment.center,
+                children: [
+                  for (final p in _presets)
+                    ActionChip(
+                      label: Text(LeadTime.label(p)),
+                      onPressed: () => _applyPreset(p),
+                    ),
+                ],
+              ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            _total <= 0 ? 'At start time' : LeadTime.label(_total),
-            textAlign: TextAlign.center,
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            alignment: WrapAlignment.center,
-            children: [
-              for (final p in _presets)
-                ActionChip(
-                  label: Text(LeadTime.label(p)),
-                  onPressed: () => _applyPreset(p),
-                ),
-            ],
-          ),
-        ],
+        ),
       ),
       actions: [
         TextButton(
@@ -126,40 +126,39 @@ class _LeadTimePickerDialogState extends State<_LeadTimePickerDialog> {
     );
   }
 
-  Widget _stepper({
+  /// A full-width row: label on the left, [-] value [+] controls on the right.
+  Widget _stepperRow({
     required String label,
     required int value,
     required int max,
     int step = 1,
     required ValueChanged<int> onChanged,
   }) {
-    return Column(
+    return Row(
       children: [
-        Text(label, style: Theme.of(context).textTheme.labelMedium),
-        const SizedBox(height: 4),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.remove_circle_outline),
-              onPressed:
-                  value <= 0 ? null : () => onChanged((value - step).clamp(0, max)),
-            ),
-            SizedBox(
-              width: 40,
-              child: Text(
-                value.toString(),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.add_circle_outline),
-              onPressed: value >= max
-                  ? null
-                  : () => onChanged((value + step).clamp(0, max)),
-            ),
-          ],
+        Expanded(
+          child: Text(label, style: Theme.of(context).textTheme.titleMedium),
+        ),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.remove_circle_outline),
+          onPressed:
+              value <= 0 ? null : () => onChanged((value - step).clamp(0, max)),
+        ),
+        SizedBox(
+          width: 36,
+          child: Text(
+            value.toString(),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+        ),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.add_circle_outline),
+          onPressed: value >= max
+              ? null
+              : () => onChanged((value + step).clamp(0, max)),
         ),
       ],
     );
