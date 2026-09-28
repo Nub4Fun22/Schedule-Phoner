@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -10,13 +11,12 @@ import 'package:share_plus/share_plus.dart';
 import '../services/notification_service.dart';
 import '../state/schedule_store.dart';
 import '../state/settings_store.dart';
+import '../widgets/lead_time_picker.dart';
 
 /// A full settings screen: notification behavior, appearance, demo data and
 /// destructive data actions (delete demo / delete everything).
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
-
-  static const List<int> _reminderOptions = [0, 5, 10, 15, 30, 60, 120, 24 * 60];
 
   @override
   Widget build(BuildContext context) {
@@ -77,18 +77,14 @@ class SettingsScreen extends StatelessWidget {
             title: const Text('Default reminder time'),
             subtitle: Text('New items remind '
                 '${_reminderLabel(settings.defaultReminderMinutes)} by default'),
-            trailing: DropdownButton<int>(
-              value: _reminderOptions.contains(settings.defaultReminderMinutes)
-                  ? settings.defaultReminderMinutes
-                  : 10,
-              underline: const SizedBox.shrink(),
-              items: [
-                for (final m in _reminderOptions)
-                  DropdownMenuItem(value: m, child: Text(_reminderLabel(m))),
-              ],
-              onChanged: (m) =>
-                  settings.setDefaultReminderMinutes(m ?? 10),
-            ),
+            trailing: const Icon(Icons.edit_outlined),
+            onTap: () async {
+              final picked = await LeadTime.pick(
+                  context, settings.defaultReminderMinutes);
+              if (picked != null) {
+                await settings.setDefaultReminderMinutes(picked);
+              }
+            },
           ),
           ListTile(
             leading: const Icon(Icons.notification_add_outlined),
@@ -139,7 +135,8 @@ class SettingsScreen extends StatelessWidget {
             leading: const Icon(Icons.ios_share_outlined),
             title: const Text('Export schedule'),
             subtitle: const Text(
-                'Save/share a backup file of all your items, homework and tasks'),
+                'Save to your device or share a backup of all your items, '
+                'homework and tasks'),
             onTap: () => _exportSchedule(context, store),
           ),
           ListTile(
@@ -302,21 +299,62 @@ class SettingsScreen extends StatelessWidget {
 
   Future<void> _exportSchedule(
       BuildContext context, ScheduleStore store) async {
+    // Let the user choose: save directly to the device (Downloads/anywhere via
+    // the system file dialog) or share to another app.
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.download_outlined),
+              title: const Text('Save to device'),
+              subtitle: const Text('Pick a folder (e.g. Downloads)'),
+              onTap: () => Navigator.of(ctx).pop('save'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.share_outlined),
+              title: const Text('Share'),
+              subtitle: const Text('Send to Drive, email, etc.'),
+              onTap: () => Navigator.of(ctx).pop('share'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null) return;
+
     try {
       final json = store.exportToJson();
-      final dir = await getTemporaryDirectory();
       final stamp = DateTime.now()
           .toIso8601String()
           .replaceAll(':', '-')
           .split('.')
           .first;
-      final file = File('${dir.path}/schedule-phoner-backup-$stamp.json');
-      await file.writeAsString(json);
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'application/json')],
-        subject: 'Schedule Phoner backup',
-        text: 'My Schedule Phoner backup',
-      );
+      final fileName = 'schedule-phoner-backup-$stamp.json';
+
+      if (choice == 'save') {
+        // Native "save to..." dialog (Storage Access Framework on Android).
+        final savedPath = await FilePicker.platform.saveFile(
+          dialogTitle: 'Save schedule backup',
+          fileName: fileName,
+          bytes: Uint8List.fromList(utf8.encode(json)),
+        );
+        if (context.mounted) {
+          _snack(
+              context, savedPath == null ? 'Save cancelled' : 'Saved backup');
+        }
+      } else {
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/$fileName');
+        await file.writeAsString(json);
+        await Share.shareXFiles(
+          [XFile(file.path, mimeType: 'application/json')],
+          subject: 'Schedule Phoner backup',
+          text: 'My Schedule Phoner backup',
+        );
+      }
     } catch (e) {
       if (context.mounted) _snack(context, 'Export failed: $e');
     }
@@ -427,12 +465,8 @@ class SettingsScreen extends StatelessWidget {
       ));
   }
 
-  static String _reminderLabel(int m) {
-    if (m == 0) return 'at start';
-    if (m == 24 * 60) return '1 day before';
-    if (m >= 60) return '${m ~/ 60}h before';
-    return '$m min before';
-  }
+  static String _reminderLabel(int m) =>
+      m <= 0 ? 'at start' : LeadTime.label(m, suffix: 'before');
 
   static String _themeLabel(ThemeMode mode) {
     switch (mode) {
