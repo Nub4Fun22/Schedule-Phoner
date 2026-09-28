@@ -1,7 +1,7 @@
 name: school_schedule
 description: A clean school timetable app with weekly grid and day views, event details, and per-event/all notifications.
 publish_to: 'none'
-version: 2.9.0+15
+version: 2.11.0+17
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -26,6 +26,11 @@ dependencies:
   # Android/iOS home-screen widgets (native widget code required).
   # Pinned to 0.9.2+1 for compatibility with the CI's Flutter 3.24.5.
   home_widget: 0.9.2+1
+  # Export: write a temp file + share it via the system share sheet.
+  path_provider: ^2.1.4
+  share_plus: ^7.2.2
+  # Import: let the user pick a .json schedule file.
+  file_picker: ^8.0.0+1
 
 dev_dependencies:
   flutter_test:
