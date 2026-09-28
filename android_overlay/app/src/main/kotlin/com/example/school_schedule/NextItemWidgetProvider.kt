@@ -20,10 +20,18 @@ import es.antonborri.home_widget.HomeWidgetPlugin
  * HomeWidget.saveWidgetData(...).
  */
 class NextItemWidgetProvider : AppWidgetProvider() {
+
+    companion object {
+        // Custom broadcast fired by the in-widget refresh button.
+        const val ACTION_REFRESH = "com.example.school_schedule.WIDGET_REFRESH"
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        // Refresh the countdown on boot / update / screen-on without the app.
+        // Refresh the countdown on the manual button, boot / update /
+        // screen-on — all without needing the app open.
         when (intent.action) {
+            ACTION_REFRESH,
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
             Intent.ACTION_SCREEN_ON,
@@ -91,7 +99,7 @@ class NextItemWidgetProvider : AppWidgetProvider() {
                 if (hasFollowing) View.VISIBLE else View.GONE
             )
 
-            // Tapping the widget opens the app.
+            // Tapping the widget body opens the app.
             val launchIntent = context.packageManager
                 .getLaunchIntentForPackage(context.packageName)
             if (launchIntent != null) {
@@ -103,6 +111,18 @@ class NextItemWidgetProvider : AppWidgetProvider() {
                 )
                 views.setOnClickPendingIntent(R.id.widget_root, pending)
             }
+
+            // Tapping the ↻ button refreshes the countdown in place (broadcast
+            // back to this provider — works without opening the app).
+            val refreshIntent = Intent(context, NextItemWidgetProvider::class.java)
+                .setAction(ACTION_REFRESH)
+            val refreshPending = PendingIntent.getBroadcast(
+                context,
+                0,
+                refreshIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.widget_refresh, refreshPending)
 
             appWidgetManager.updateAppWidget(widgetId, views)
         }
