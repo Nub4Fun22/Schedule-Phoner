@@ -345,17 +345,19 @@ class ScheduleStore extends ChangeNotifier {
       debugPrint('rescheduleAll (notifications) failed: $e');
     }
     try {
-      // Keep the home-screen widget in sync with the next two items.
-      final upcomingForWidget = widgetUpcoming(limit: 2);
-      await WidgetService.instance.updateNextItem(
-        item: upcomingForWidget.isNotEmpty ? upcomingForWidget[0].item : null,
-        occurrenceWhen:
-            upcomingForWidget.isNotEmpty ? upcomingForWidget[0].when : null,
-        following:
-            upcomingForWidget.length > 1 ? upcomingForWidget[1].item : null,
-        followingWhen:
-            upcomingForWidget.length > 1 ? upcomingForWidget[1].when : null,
-      );
+      // Push the next several occurrences so the widget can roll over to the
+      // next one NATIVELY as each passes (without the app running).
+      final upcomingForWidget = widgetUpcoming(limit: 8);
+      final payload = upcomingForWidget
+          .map((o) => <String, dynamic>{
+                'epoch': o.when.millisecondsSinceEpoch,
+                'type': o.item.type.label,
+                'title': o.item.title,
+                'time': o.item.start.format(),
+                'location': o.item.location,
+              })
+          .toList();
+      await WidgetService.instance.updateOccurrences(payload);
     } catch (e) {
       debugPrint('rescheduleAll (widget) failed: $e');
     }
