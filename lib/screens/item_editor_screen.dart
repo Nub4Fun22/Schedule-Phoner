@@ -236,7 +236,14 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          // Extra bottom padding (+ the system nav-bar inset) so the last
+          // fields scroll clear of the on-screen navigation buttons.
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            16 + MediaQuery.of(context).viewPadding.bottom + 48,
+          ),
           children: [
             // Type selector
             Text('Type', style: Theme.of(context).textTheme.titleSmall),
