@@ -121,6 +121,9 @@ class ItemDetailsScreen extends StatelessWidget {
   Widget _homeworkSection(
       BuildContext context, ScheduleStore store, ScheduleItem lab) {
     final homeworks = store.homeworksForLab(lab.id);
+    final isProject = lab.type == ItemType.project;
+    final sectionTitle = isProject ? 'Deadlines' : 'Homework';
+    final noun = isProject ? 'deadline' : 'homework';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -128,7 +131,7 @@ class ItemDetailsScreen extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
           child: Row(
             children: [
-              Text('Homework',
+              Text(sectionTitle,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700)),
               const Spacer(),
@@ -141,10 +144,11 @@ class ItemDetailsScreen extends StatelessWidget {
           ),
         ),
         if (homeworks.isEmpty)
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: Text('No homework yet. Homework reminds you before each '
-                'occurrence of this lab, until you mark it done.'),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: Text('No $noun yet. A $noun reminds you before each '
+                'occurrence of this ${lab.type.label.toLowerCase()}, until you '
+                'mark it done.'),
           ),
         for (final hw in homeworks)
           ListTile(
@@ -180,9 +184,13 @@ class ItemDetailsScreen extends StatelessWidget {
     final result = await showDialog<ReminderConfig>(
       context: context,
       builder: (_) => ReminderDialog(
-        title: existing == null ? 'Add homework' : 'Edit homework',
-        parentLabel: 'lab',
-        descriptionHint: 'What is the homework? (optional)',
+        title: existing == null
+            ? (lab.type == ItemType.project ? 'Add deadline' : 'Add homework')
+            : (lab.type == ItemType.project ? 'Edit deadline' : 'Edit homework'),
+        parentLabel: lab.type.label.toLowerCase(),
+        descriptionHint: lab.type == ItemType.project
+            ? 'What is the deadline? (optional)'
+            : 'What is the homework? (optional)',
         initial: existing == null
             ? null
             : ReminderConfig(

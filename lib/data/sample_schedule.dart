@@ -126,12 +126,12 @@ class SampleSchedule {
         colorValue: _green,
       ),
 
-      // --- Project (weekly, linked to the CS lab) --------------------------
+      // --- Project (weekly, standalone; carries its own deadlines) ---------
       const ScheduleItem(
         id: '${demoPrefix}cs-project',
         type: ItemType.project,
         title: 'CS Group Project',
-        description: 'Build a small app — linked to the CS lab',
+        description: 'Build a small app',
         location: 'Lab 2',
         oneTime: false,
         weekday: Weekday.tuesday,
@@ -247,6 +247,14 @@ class SampleSchedule {
         dueDate: inDays(6),
         dailyUntil: true,
         dailyReminderTime: const SlotTime(20, 0),
+      ),
+      // A deadline attached to the standalone CS project (projects carry
+      // deadlines just like labs carry homework).
+      Homework(
+        id: '${demoPrefix}hw-6',
+        labId: '${demoPrefix}cs-project',
+        description: 'Submit project milestone 1',
+        dueDate: inDays(9),
       ),
     ];
 

@@ -194,6 +194,7 @@ class ScheduleStore extends ChangeNotifier {
       ItemType.course,
       ItemType.lab,
       ItemType.seminar,
+      ItemType.project,
       ItemType.test,
       ItemType.exam,
     }, limit: limit);

@@ -110,11 +110,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 const PriorityScreen(),
               ],
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openEditor,
-        icon: const Icon(Icons.add),
-        label: const Text('Add'),
-      ),
+      // Add button only on the Grid tab.
+      floatingActionButton: _tab == 0
+          ? FloatingActionButton.extended(
+              onPressed: _openEditor,
+              icon: const Icon(Icons.add),
+              label: const Text('Add'),
+            )
+          : null,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: _onTabSelected,

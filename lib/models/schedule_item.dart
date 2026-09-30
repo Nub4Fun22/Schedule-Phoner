@@ -162,24 +162,28 @@ extension ItemTypeX on ItemType {
   bool get isOneTimeOnly =>
       this == ItemType.exam || this == ItemType.projectPresentation;
 
-  /// Whether this type is always a recurring weekly event.
+  /// Whether this type is always a recurring weekly event. Project is now
+  /// weekly like a Lab (it carries its own deadlines instead of being one-off).
   bool get isWeeklyOnly =>
       this == ItemType.course ||
       this == ItemType.lab ||
-      this == ItemType.seminar;
+      this == ItemType.seminar ||
+      this == ItemType.project;
 
-  /// Whether this type carries homework (Lab and Seminar are 1:1).
+  /// Whether this type carries "deadline" sub-items (homework/project work).
+  /// Lab, Seminar and Project all do — a Project now behaves like a Lab and
+  /// carries its own deadlines (no longer linked to a Lab).
   bool get carriesHomework =>
-      this == ItemType.lab || this == ItemType.seminar;
+      this == ItemType.lab ||
+      this == ItemType.seminar ||
+      this == ItemType.project;
 
   /// Whether this type can be either one-time or weekly (user chooses).
   bool get supportsBothModes =>
-      this == ItemType.test ||
-      this == ItemType.project ||
-      this == ItemType.event;
+      this == ItemType.test || this == ItemType.event;
 
-  /// Whether this type must be linked to a specific Lab.
-  bool get requiresLabLink => this == ItemType.project;
+  /// Deprecated: Projects are now standalone (not linked to a Lab).
+  bool get requiresLabLink => false;
 
   /// Whether this type can carry attached "tasks" (like a Lab carries homework,
   /// an Event carries tasks). Only weekly instances get recurring task

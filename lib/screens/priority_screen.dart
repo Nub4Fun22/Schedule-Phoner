@@ -47,11 +47,11 @@ class _HomeworkHalf extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _header(context, Icons.assignment_outlined, 'Homework',
-            'Soonest due = highest'),
+        _header(context, Icons.assignment_outlined, 'Deadlines',
+            'Homework & projects • soonest due = highest'),
         Expanded(
           child: homeworks.isEmpty
-              ? const _EmptyNote('No homework. Nice.')
+              ? const _EmptyNote('No deadlines. Nice.')
               : ListView.separated(
                   padding: const EdgeInsets.all(12),
                   itemCount: homeworks.length,
@@ -69,7 +69,11 @@ class _HomeworkHalf extends StatelessWidget {
                               store.setHomeworkDone(hw.id, v ?? false),
                         ),
                         title: Text(
-                          hw.description.isEmpty ? 'Homework' : hw.description,
+                          hw.description.isEmpty
+                              ? (lab?.type == ItemType.project
+                                  ? 'Project deadline'
+                                  : 'Homework')
+                              : hw.description,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             decoration:

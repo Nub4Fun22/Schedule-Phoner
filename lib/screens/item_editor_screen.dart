@@ -53,7 +53,11 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
       _type.carriesHomework || _type == ItemType.event;
 
   /// Word for the sub-item given the current type.
-  String get _subItemNoun => _type == ItemType.event ? 'task' : 'homework';
+  String get _subItemNoun => _type == ItemType.event
+      ? 'task'
+      : _type == ItemType.project
+          ? 'deadline'
+          : 'homework';
 
   @override
   void initState() {
@@ -267,6 +271,12 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
             ),
             const SizedBox(height: 16),
 
+            // Color — placed near the top so it's easy to reach.
+            Text('Color', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            _colorPicker(),
+            const SizedBox(height: 16),
+
             // One-time vs weekly (only for types that support both)
             if (_type.supportsBothModes) ...[
               SegmentedButton<bool>(
@@ -369,18 +379,9 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
                 child: Text(_leadLabel(_reminderMinutes)),
               ),
             ),
-            const SizedBox(height: 20),
-
-            Text('Color', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
-            _colorPicker(),
 
-            if (_type == ItemType.project) ...[
-              const SizedBox(height: 8),
-              const Divider(),
-              _projectLabHint(),
-            ],
-            // Inline homework/tasks when CREATING a lab/seminar/event.
+            // Inline homework/tasks when CREATING a lab/seminar/project/event.
             if (_carriesSubItems && !_isEditing) ...[
               const SizedBox(height: 8),
               const Divider(),
@@ -451,7 +452,11 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
   /// user can add them "on the spot".
   Widget _inlineSubItemsSection() {
     final noun = _subItemNoun;
-    final title = _type == ItemType.event ? 'Tasks' : 'Homework';
+    final title = _type == ItemType.event
+        ? 'Tasks'
+        : _type == ItemType.project
+            ? 'Deadlines'
+            : 'Homework';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -507,10 +512,12 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
       context: context,
       builder: (_) => ReminderDialog(
         title: 'Add $noun',
-        parentLabel: _type == ItemType.event ? 'event' : 'lab',
+        parentLabel: _type.label.toLowerCase(),
         descriptionHint: _type == ItemType.event
             ? 'What is the task? (e.g. do dishes)'
-            : 'What is the homework? (optional)',
+            : _type == ItemType.project
+                ? 'What is the deadline? (optional)'
+                : 'What is the homework? (optional)',
       ),
     );
     if (cfg != null) setState(() => _pendingSubItems.add(cfg));
@@ -528,24 +535,6 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
             child: Text(
               'Manage $noun from this ${_type.label.toLowerCase()}\'s details '
               'screen (open it from the schedule).',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _projectLabHint() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Icon(Icons.info_outline, size: 18),
-          SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Projects should be linked to a lab. You can pick the lab from '
-              'the project\'s details screen after saving.',
             ),
           ),
         ],
