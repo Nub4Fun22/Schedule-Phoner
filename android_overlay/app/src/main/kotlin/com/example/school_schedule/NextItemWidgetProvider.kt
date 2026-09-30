@@ -9,6 +9,7 @@ import android.content.Intent
 import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetPlugin
+import java.util.Calendar
 
 /**
  * 4x2 home-screen widget that shows the next Course/Lab/Seminar/Test/Exam with
@@ -53,24 +54,41 @@ class NextItemWidgetProvider : AppWidgetProvider() {
     ) {
         val prefs = HomeWidgetPlugin.getData(context)
         val title = prefs.getString("next_title", null) ?: "No upcoming items"
-        val subtitle = prefs.getString("next_subtitle", null) ?: "Open the app to add some"
         val typeLabel = prefs.getString("next_type", null) ?: "Schedule Phoner"
 
         val now = System.currentTimeMillis()
 
-        // Live countdown for the next item (fall back to the pushed string).
+        // --- Next item -------------------------------------------------------
+        // Build "day • time • location" with a LIVE day label from the epoch,
+        // so it stays correct across midnight (was frozen as "Tomorrow"
+        // before). Fall back to the pushed subtitle if there's no epoch.
         val nextEpoch = parseEpoch(prefs.getString("next_epoch", null))
-        val countdown = if (nextEpoch != null) {
-            countdownText(nextEpoch - now)
+        val nextTime = prefs.getString("next_time", null) ?: ""
+        val nextLocation = prefs.getString("next_location", null) ?: ""
+        val subtitle: String
+        val countdown: String
+        if (nextEpoch != null) {
+            val parts = ArrayList<String>()
+            parts.add(dayLabel(nextEpoch, now))
+            if (nextTime.isNotEmpty()) parts.add(nextTime)
+            if (nextLocation.isNotEmpty()) parts.add(nextLocation)
+            subtitle = parts.joinToString(" • ")
+            countdown = countdownText(nextEpoch - now)
         } else {
-            prefs.getString("next_countdown", null) ?: ""
+            subtitle = prefs.getString("next_subtitle", null) ?: "Open the app to add some"
+            countdown = prefs.getString("next_countdown", null) ?: ""
         }
 
+        // --- Following item --------------------------------------------------
         val followingTitle = prefs.getString("following_title", null) ?: ""
-        val followingPrefix = prefs.getString("following_prefix", null) ?: ""
+        val followingTime = prefs.getString("following_time", null) ?: ""
         val followingEpoch = parseEpoch(prefs.getString("following_epoch", null))
-        val followingSub = if (followingEpoch != null && followingPrefix.isNotEmpty()) {
-            followingPrefix + countdownText(followingEpoch - now)
+        val followingSub = if (followingEpoch != null) {
+            val parts = ArrayList<String>()
+            parts.add(dayLabel(followingEpoch, now))
+            if (followingTime.isNotEmpty()) parts.add(followingTime)
+            parts.add(countdownText(followingEpoch - now))
+            parts.joinToString(" • ")
         } else {
             prefs.getString("following_sub", null) ?: ""
         }
@@ -131,6 +149,43 @@ class NextItemWidgetProvider : AppWidgetProvider() {
     private fun parseEpoch(s: String?): Long? {
         if (s.isNullOrEmpty()) return null
         return s.toLongOrNull()
+    }
+
+    /**
+     * "Today" / "Tomorrow" / weekday / dd/MM for a target epoch, computed live
+     * against [nowMillis] so it's always correct (never a stale "Tomorrow").
+     */
+    private fun dayLabel(targetMillis: Long, nowMillis: Long): String {
+        val today = Calendar.getInstance().apply { timeInMillis = nowMillis }
+        val target = Calendar.getInstance().apply { timeInMillis = targetMillis }
+        // Whole-day difference (ignore the time-of-day).
+        fun startOfDay(c: Calendar): Long {
+            val d = c.clone() as Calendar
+            d.set(Calendar.HOUR_OF_DAY, 0)
+            d.set(Calendar.MINUTE, 0)
+            d.set(Calendar.SECOND, 0)
+            d.set(Calendar.MILLISECOND, 0)
+            return d.timeInMillis
+        }
+        val diffDays = ((startOfDay(target) - startOfDay(today)) / 86400000L).toInt()
+        return when {
+            diffDays <= 0 -> "Today"
+            diffDays == 1 -> "Tomorrow"
+            diffDays < 7 -> when (target.get(Calendar.DAY_OF_WEEK)) {
+                Calendar.MONDAY -> "Monday"
+                Calendar.TUESDAY -> "Tuesday"
+                Calendar.WEDNESDAY -> "Wednesday"
+                Calendar.THURSDAY -> "Thursday"
+                Calendar.FRIDAY -> "Friday"
+                Calendar.SATURDAY -> "Saturday"
+                else -> "Sunday"
+            }
+            else -> {
+                val d = target.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')
+                val m = (target.get(Calendar.MONTH) + 1).toString().padStart(2, '0')
+                "$d/$m"
+            }
+        }
     }
 
     /** "now" / "in 45m" / "in 2h 15m" / "in 3d 4h" from a millis delta. */
