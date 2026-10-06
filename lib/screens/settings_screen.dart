@@ -143,14 +143,6 @@ class SettingsScreen extends StatelessWidget {
             onTap: () => _setCurrentWeek(context, settings, store),
           ),
           ListTile(
-            leading: const Icon(Icons.event_outlined),
-            title: const Text('Week 1 starts on'),
-            subtitle: Text(
-                '${_fmtDate(settings.weekAnchor)} (Monday of that week)'),
-            trailing: const Icon(Icons.edit_outlined),
-            onTap: () => _pickWeekAnchor(context, settings, store),
-          ),
-          ListTile(
             leading: Icon(Icons.restart_alt,
                 color: Theme.of(context).colorScheme.error),
             title: const Text('Reset week counter'),
@@ -457,9 +449,6 @@ class SettingsScreen extends StatelessWidget {
 
   // ---- Week counter -------------------------------------------------------
 
-  static String _fmtDate(DateTime d) =>
-      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
-
   Future<void> _setCurrentWeek(BuildContext context, SettingsStore settings,
       ScheduleStore store) async {
     int value = settings.currentWeekNumber;
@@ -492,7 +481,7 @@ class SettingsScreen extends StatelessWidget {
                   IconButton(
                     iconSize: 36,
                     icon: const Icon(Icons.add_circle_outline),
-                    onPressed: value >= 53
+                    onPressed: value >= 100
                         ? null
                         : () => setLocal(() => value++),
                   ),
@@ -518,24 +507,6 @@ class SettingsScreen extends StatelessWidget {
     await store.applyWeekAnchor(settings.weekAnchor);
     if (context.mounted) {
       _snack(context, 'Now on week ${settings.currentWeekNumber}');
-    }
-  }
-
-  Future<void> _pickWeekAnchor(BuildContext context, SettingsStore settings,
-      ScheduleStore store) async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: settings.weekAnchor,
-      firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 2),
-      helpText: 'Pick any day in your Week 1',
-    );
-    if (picked == null) return;
-    await settings.setWeekAnchor(picked);
-    await store.applyWeekAnchor(settings.weekAnchor);
-    if (context.mounted) {
-      _snack(context, 'Week 1 set — now on week ${settings.currentWeekNumber}');
     }
   }
 
