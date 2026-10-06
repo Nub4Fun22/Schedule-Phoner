@@ -36,7 +36,9 @@ A clean Flutter timetable app for your school schedule. **Android now, iOS later
 - **Quick add** — the **Add** button lets you create either a **single item**
   or a whole **Subject** at once (a Course + a Lab/Seminar + an optional
   Project, sharing the name & color but created as independent items you can
-  edit/delete separately).
+  edit/delete separately). Each part of the subject offers the **same full
+  options as a single item** — day, start/end time, odd/even week restriction,
+  location, description, reminder lead time, and inline homework/deadlines.
 - **Week counter & odd/even weeks** — a settable **week number** (shown on the
   grid and widget, rolling over every Monday). Any weekly item can be limited
   to **odd** or **even** weeks (off by default), so e.g. a lab on odd weeks and
@@ -227,7 +229,9 @@ Two easy options:
 
 1. **In the app (no code):** Tap **Add**, then pick:
    - **Subject** — add a Course + a Lab/Seminar (+ optional Project) in one
-     go, sharing the subject's name & color; or
+     go, sharing the subject's name & color. Each part has the full item
+     options (day, time, odd/even weeks, location, description, reminder, and
+     inline homework/deadlines); or
    - **Single item** — choose a type (Course, Lab, Seminar, Test, Project,
      Presentation, Exam, or Event), fill in the details, and save.
 

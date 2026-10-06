@@ -3,7 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../models/schedule_item.dart';
 import '../state/schedule_store.dart';
+import '../state/settings_store.dart';
 import '../widgets/color_utils.dart';
+import '../widgets/date_format_utils.dart';
+import '../widgets/lead_time_picker.dart';
+import 'homework_task_dialog.dart';
 
 /// Result of the subject wizard: how many items were created + the name.
 class SubjectSaveResult {
@@ -16,6 +20,10 @@ class SubjectSaveResult {
 /// optionally a Project — all sharing the subject's name + color, but created
 /// as INDEPENDENT items (so you can later delete one, e.g. the course, and the
 /// others remain).
+///
+/// Each part exposes the SAME per-item options as the single-item editor:
+/// day, start/end time, odd/even week restriction, location, description and
+/// reminder lead time.
 class SubjectWizardScreen extends StatefulWidget {
   const SubjectWizardScreen({super.key});
 
@@ -31,13 +39,37 @@ class _PartConfig {
   TimeOfDay end;
   // For the "practical" part: lab vs seminar.
   ItemType type;
+  WeekParity weekParity;
+  int reminderMinutes;
+  final TextEditingController location;
+  final TextEditingController description;
+  // Inline homework/deadlines added on the spot (persisted on save).
+  final List<ReminderConfig> pending;
   _PartConfig({
     required this.enabled,
     required this.weekday,
     required this.start,
     required this.end,
     required this.type,
-  });
+    this.weekParity = WeekParity.any,
+    this.reminderMinutes = 10,
+  })  : location = TextEditingController(),
+        description = TextEditingController(),
+        pending = [];
+
+  /// Whether this part carries inline homework/deadlines.
+  bool get carriesSubItems => type.carriesHomework;
+
+  /// Word for the sub-item for this part.
+  String get subItemNoun => type == ItemType.project ? 'deadline' : 'homework';
+
+  /// Section title for this part's sub-items.
+  String get subItemTitle => type == ItemType.project ? 'Deadlines' : 'Homework';
+
+  void dispose() {
+    location.dispose();
+    description.dispose();
+  }
 }
 
 class _SubjectWizardScreenState extends State<SubjectWizardScreen> {
@@ -47,6 +79,9 @@ class _SubjectWizardScreenState extends State<SubjectWizardScreen> {
   late final _PartConfig _course;
   late final _PartConfig _practical; // Lab or Seminar
   late final _PartConfig _project;
+  late final List<_PartConfig> _allParts;
+
+  bool _seededReminders = false;
 
   @override
   void initState() {
@@ -72,11 +107,32 @@ class _SubjectWizardScreenState extends State<SubjectWizardScreen> {
       end: const TimeOfDay(hour: 15, minute: 0),
       type: ItemType.project,
     );
+    _allParts = [_course, _practical, _project];
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Seed each part's reminder lead time from the user's default (once).
+    if (!_seededReminders) {
+      _seededReminders = true;
+      final def = context.read<SettingsStore>().defaultReminderMinutes;
+      if (def >= 0) {
+        setState(() {
+          for (final p in _allParts) {
+            p.reminderMinutes = def;
+          }
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    for (final p in _allParts) {
+      p.dispose();
+    }
     super.dispose();
   }
 
@@ -131,16 +187,34 @@ class _SubjectWizardScreenState extends State<SubjectWizardScreen> {
     final base = DateTime.now().microsecondsSinceEpoch;
     var i = 0;
     for (final p in parts) {
+      final id = 'item-$base-${i++}';
       await store.addOrUpdateItem(ScheduleItem(
-        id: 'item-$base-${i++}',
+        id: id,
         type: p.type,
         title: name,
+        description: p.description.text.trim(),
+        location: p.location.text.trim(),
         oneTime: false,
         weekday: p.weekday,
         start: SlotTime.fromTimeOfDay(p.start),
         end: SlotTime.fromTimeOfDay(p.end),
         colorValue: _colorValue,
+        reminderMinutesBefore: p.reminderMinutes,
+        weekParity: p.weekParity,
       ));
+      // Persist any inline homework/deadlines against the new item's id.
+      var j = 0;
+      for (final cfg in p.pending) {
+        await store.addOrUpdateHomework(Homework(
+          id: 'hw-$base-$id-${j++}',
+          labId: id,
+          description: cfg.description,
+          dueDate: cfg.dueDate,
+          reminderMinutesBeforeLab: cfg.leadMinutes,
+          dailyUntil: cfg.dailyUntil,
+          dailyReminderTime: cfg.dailyTime,
+        ));
+      }
     }
 
     if (mounted) {
@@ -318,11 +392,158 @@ class _SubjectWizardScreenState extends State<SubjectWizardScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 4),
+
+              // Odd/even week restriction.
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.repeat_on_outlined),
+                title: const Text('Only on some weeks'),
+                subtitle: Text(part.weekParity == WeekParity.any
+                    ? 'Shows every week'
+                    : part.weekParity == WeekParity.odd
+                        ? 'Odd weeks only'
+                        : 'Even weeks only'),
+                value: part.weekParity != WeekParity.any,
+                onChanged: (on) => setState(() {
+                  part.weekParity = on ? WeekParity.odd : WeekParity.any;
+                }),
+              ),
+              if (part.weekParity != WeekParity.any)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: SegmentedButton<WeekParity>(
+                    segments: const [
+                      ButtonSegment(
+                          value: WeekParity.odd, label: Text('Odd weeks')),
+                      ButtonSegment(
+                          value: WeekParity.even, label: Text('Even weeks')),
+                    ],
+                    selected: {part.weekParity},
+                    onSelectionChanged: (s) =>
+                        setState(() => part.weekParity = s.first),
+                  ),
+                ),
+              const SizedBox(height: 12),
+
+              TextField(
+                controller: part.location,
+                decoration: const InputDecoration(
+                  labelText: 'Location (optional)',
+                  prefixIcon: Icon(Icons.place_outlined),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: part.description,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Description (optional)',
+                  prefixIcon: Icon(Icons.notes),
+                  alignLabelWithHint: true,
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Reminder lead time.
+              InkWell(
+                onTap: () async {
+                  final picked =
+                      await LeadTime.pick(context, part.reminderMinutes);
+                  if (picked != null) {
+                    setState(() => part.reminderMinutes = picked);
+                  }
+                },
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Remind me before',
+                    prefixIcon: Icon(Icons.notifications_active_outlined),
+                    suffixIcon: Icon(Icons.edit_outlined),
+                    isDense: true,
+                  ),
+                  child: Text(LeadTime.label(part.reminderMinutes)),
+                ),
+              ),
+
+              // Inline homework / deadlines for lab, seminar and project parts.
+              if (part.carriesSubItems) ...[
+                const SizedBox(height: 8),
+                const Divider(),
+                _subItemsSection(part),
+              ],
             ],
           ],
         ),
       ),
     );
+  }
+
+  Widget _subItemsSection(_PartConfig part) {
+    final noun = part.subItemNoun;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(part.subItemTitle,
+                style: Theme.of(context).textTheme.titleSmall),
+            const Spacer(),
+            FilledButton.tonalIcon(
+              icon: const Icon(Icons.add, size: 18),
+              label: Text('Add $noun'),
+              onPressed: () => _addSubItem(part),
+            ),
+          ],
+        ),
+        if (part.pending.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Optionally add $noun now. You can also add more later from the '
+              '${part.type.label.toLowerCase()}\'s details screen.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        for (int i = 0; i < part.pending.length; i++)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.check_box_outline_blank),
+            title: Text(part.pending[i].description.isEmpty
+                ? (part.type == ItemType.project ? 'Deadline' : 'Homework')
+                : part.pending[i].description),
+            subtitle: Text(_subItemSubtitle(part.pending[i])),
+            trailing: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => setState(() => part.pending.removeAt(i)),
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _subItemSubtitle(ReminderConfig c) {
+    final due = DateFormatUtils.dueWithCountdown(c.dueDate);
+    if (c.dailyUntil && c.dailyTime != null) {
+      return 'Due $due • daily at ${c.dailyTime!.format()}';
+    }
+    return 'Due $due';
+  }
+
+  Future<void> _addSubItem(_PartConfig part) async {
+    final noun = part.subItemNoun;
+    final cfg = await showDialog<ReminderConfig>(
+      context: context,
+      builder: (_) => ReminderDialog(
+        title: 'Add $noun',
+        parentLabel: part.type.label.toLowerCase(),
+        descriptionHint: part.type == ItemType.project
+            ? 'What is the deadline? (optional)'
+            : 'What is the homework? (optional)',
+      ),
+    );
+    if (cfg != null) setState(() => part.pending.add(cfg));
   }
 
   Widget _timeField(
