@@ -41,10 +41,12 @@ class _HomeScreenState extends State<HomeScreen> {
       _syncedPrefs = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        context.read<ScheduleStore>().applyNotificationPreferences(
-              sound: settings.notificationSound,
-              vibrate: settings.vibrate,
-            );
+        final store = context.read<ScheduleStore>();
+        store.applyWeekAnchor(settings.weekAnchor);
+        store.applyNotificationPreferences(
+          sound: settings.notificationSound,
+          vibrate: settings.vibrate,
+        );
       });
     }
   }

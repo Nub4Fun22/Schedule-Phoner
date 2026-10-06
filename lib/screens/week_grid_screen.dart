@@ -23,6 +23,7 @@ class WeekGridScreen extends StatelessWidget {
     final store = context.watch<ScheduleStore>();
     final showWeekend = context.watch<SettingsStore>().showWeekendInGrid;
     final days = showWeekend ? Weekday.fullWeek : Weekday.schoolWeek;
+    final weekNumber = store.currentWeekNumber;
 
     // Always show a full standard day (7:00–22:00) so the grid has all its
     // hour rows even when the schedule is empty. If any displayed item falls
@@ -46,41 +47,74 @@ class WeekGridScreen extends StatelessWidget {
     final totalHours = (endHour - startHour).clamp(1, 24);
     final gridHeight = totalHours * _hourHeight;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final available = constraints.maxWidth - _timeColWidth;
-        final colWidth = (available / days.length).clamp(_minColWidth, 400.0);
-        final bodyWidth = _timeColWidth + colWidth * days.length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _weekBanner(context, weekNumber),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final available = constraints.maxWidth - _timeColWidth;
+              final colWidth =
+                  (available / days.length).clamp(_minColWidth, 400.0);
+              final bodyWidth = _timeColWidth + colWidth * days.length;
 
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SizedBox(
-            width: bodyWidth,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _headerRow(context, days, colWidth),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: SizedBox(
-                      height: gridHeight,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _timeColumn(context, startHour, endHour),
-                          for (final day in days)
-                            _dayColumn(context, store, day, colWidth,
-                                startHour, gridHeight),
-                        ],
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: bodyWidth,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _headerRow(context, days, colWidth),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: SizedBox(
+                            height: gridHeight,
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _timeColumn(context, startHour, endHour),
+                                for (final day in days)
+                                  _dayColumn(context, store, day, colWidth,
+                                      startHour, gridHeight),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              );
+            },
           ),
-        );
-      },
+        ),
+      ],
+    );
+  }
+
+  Widget _weekBanner(BuildContext context, int weekNumber) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      color: scheme.surfaceContainerHighest,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Icon(Icons.calendar_month_outlined,
+              size: 18, color: scheme.primary),
+          const SizedBox(width: 8),
+          Text('Week $weekNumber',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700)),
+          const Spacer(),
+          Text(weekNumber.isEven ? 'Even week' : 'Odd week',
+              style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
     );
   }
 

@@ -131,6 +131,32 @@ class SettingsScreen extends StatelessWidget {
           ),
 
           const Divider(),
+          _sectionHeader(context, 'Week counter'),
+
+          ListTile(
+            leading: const Icon(Icons.calendar_month_outlined),
+            title: const Text('Current week'),
+            subtitle: Text('Week ${settings.currentWeekNumber} '
+                '(${settings.currentWeekNumber.isEven ? 'even' : 'odd'}) • '
+                'shown on the grid and widget'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.event_outlined),
+            title: const Text('Week 1 starts on'),
+            subtitle: Text(
+                '${_fmtDate(settings.weekAnchor)} (Monday of that week)'),
+            trailing: const Icon(Icons.edit_outlined),
+            onTap: () => _pickWeekAnchor(context, settings, store),
+          ),
+          ListTile(
+            leading: Icon(Icons.restart_alt,
+                color: Theme.of(context).colorScheme.error),
+            title: const Text('Reset week counter'),
+            subtitle: const Text('Make this week Week 1 again'),
+            onTap: () => _confirmResetWeek(context, settings, store),
+          ),
+
+          const Divider(),
           _sectionHeader(context, 'Backup & restore'),
 
           ListTile(
@@ -424,6 +450,59 @@ class SettingsScreen extends StatelessWidget {
       }
     } catch (e) {
       if (context.mounted) _snack(context, 'Import failed: $e');
+    }
+  }
+
+  // ---- Week counter -------------------------------------------------------
+
+  static String _fmtDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  Future<void> _pickWeekAnchor(BuildContext context, SettingsStore settings,
+      ScheduleStore store) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: settings.weekAnchor,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 2),
+      helpText: 'Pick any day in your Week 1',
+    );
+    if (picked == null) return;
+    await settings.setWeekAnchor(picked);
+    await store.applyWeekAnchor(settings.weekAnchor);
+    if (context.mounted) {
+      _snack(context, 'Week 1 set — now on week ${settings.currentWeekNumber}');
+    }
+  }
+
+  Future<void> _confirmResetWeek(BuildContext context, SettingsStore settings,
+      ScheduleStore store) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.restart_alt),
+        title: const Text('Reset week counter?'),
+        content: const Text(
+            'This makes the CURRENT week become Week 1. Odd/even-week items '
+            'will shift accordingly. This cannot be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(ctx).colorScheme.error),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Reset to Week 1'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await settings.resetWeekCounter();
+      await store.applyWeekAnchor(settings.weekAnchor);
+      if (context.mounted) _snack(context, 'Week counter reset to Week 1');
     }
   }
 

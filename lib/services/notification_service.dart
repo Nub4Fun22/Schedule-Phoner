@@ -302,10 +302,15 @@ class NotificationService {
   /// Cancels everything and reschedules all enabled items + active homeworks.
   /// [sound]/[vibrate] come from user settings and pick the sound vs silent
   /// channel set for every scheduled notification.
+  /// [parityNextStart] maps an odd/even-week item's id -> the DateTime of its
+  /// next matching occurrence's START (null if none). Such items are scheduled
+  /// as a one-shot at that time (not a weekly repeat), so they don't fire on
+  /// non-matching weeks. The app reschedules often enough to set up the next.
   Future<void> rescheduleAll({
     required List<ScheduleItem> items,
     required List<Homework> homeworks,
     List<Task> tasks = const [],
+    Map<String, DateTime?> parityNextStart = const {},
     bool sound = false,
     bool vibrate = true,
   }) async {
@@ -317,7 +322,7 @@ class NotificationService {
 
     for (final item in items) {
       if (item.notificationsEnabled) {
-        await _scheduleItem(item);
+        await _scheduleItem(item, parityNextStart: parityNextStart);
       }
     }
 
@@ -402,7 +407,10 @@ class NotificationService {
     }
   }
 
-  Future<void> _scheduleItem(ScheduleItem item) async {
+  Future<void> _scheduleItem(
+    ScheduleItem item, {
+    Map<String, DateTime?> parityNextStart = const {},
+  }) async {
     final details = _detailsForPriority(item.priority);
     if (item.oneTime) {
       if (item.date == null) return;
@@ -413,6 +421,22 @@ class NotificationService {
         item.start.hour,
         item.start.minute,
       ).subtract(Duration(minutes: item.reminderMinutesBefore)));
+      if (when.isBefore(tz.TZDateTime.now(tz.local))) return;
+      await _zonedScheduleWithFallback(
+        id: item.notificationId,
+        title: '${item.type.label}: ${item.title}',
+        body: _itemBody(item),
+        when: when,
+        details: details,
+      );
+    } else if (item.weekParity != WeekParity.any) {
+      // Odd/even-week item: schedule a ONE-SHOT at the next matching
+      // occurrence's start minus the lead time (no weekly repeat, so it never
+      // fires on a non-matching week).
+      final nextStart = parityNextStart[item.id];
+      if (nextStart == null) return;
+      final when = _tz(nextStart
+          .subtract(Duration(minutes: item.reminderMinutesBefore)));
       if (when.isBefore(tz.TZDateTime.now(tz.local))) return;
       await _zonedScheduleWithFallback(
         id: item.notificationId,

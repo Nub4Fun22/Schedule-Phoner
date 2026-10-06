@@ -68,6 +68,8 @@ class NextItemWidgetProvider : AppWidgetProvider() {
         val prefs = HomeWidgetPlugin.getData(context)
         val now = System.currentTimeMillis()
 
+        val weekNumber = prefs.getString("week_number", null) ?: "1"
+
         // Parse and filter the pushed occurrences: keep only those not yet
         // passed (minus a short grace), sorted soonest-first.
         val all = parseOccurrences(prefs.getString("occurrences", null))
@@ -80,6 +82,7 @@ class NextItemWidgetProvider : AppWidgetProvider() {
 
         for (widgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.next_item_widget)
+            views.setTextViewText(R.id.widget_week, "Week $weekNumber")
 
             if (next == null) {
                 views.setTextViewText(R.id.widget_type, "Schedule Phoner")

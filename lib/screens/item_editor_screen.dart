@@ -41,6 +41,7 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
   late TimeOfDay _end;
   late int _colorValue;
   late int _reminderMinutes;
+  late WeekParity _weekParity;
 
   bool get _isEditing => widget.existing != null;
 
@@ -73,6 +74,7 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
     _end = e?.end.toTimeOfDay() ?? const TimeOfDay(hour: 9, minute: 30);
     _colorValue = e?.colorValue ?? kSubjectPalette.first;
     _reminderMinutes = e?.reminderMinutesBefore ?? 10;
+    _weekParity = e?.weekParity ?? WeekParity.any;
     _oneTime = e?.oneTime ?? _defaultOneTimeFor(_type);
     _applyTypeConstraints();
   }
@@ -178,6 +180,8 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
       colorValue: _colorValue,
       notificationsEnabled: widget.existing?.notificationsEnabled ?? true,
       reminderMinutesBefore: _reminderMinutes,
+      // Parity only applies to weekly items.
+      weekParity: _oneTime ? WeekParity.any : _weekParity,
     );
 
     final result = ItemSaveResult(title: item.title, isNew: !_isEditing);
@@ -325,6 +329,40 @@ class _ItemEditorScreenState extends State<ItemEditorScreen> {
                 onChanged: (d) => setState(() => _weekday = d ?? Weekday.monday),
               ),
             const SizedBox(height: 16),
+
+            // Odd/even week restriction (weekly items only).
+            if (!_oneTime) ...[
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.repeat_on_outlined),
+                title: const Text('Only on some weeks'),
+                subtitle: Text(_weekParity == WeekParity.any
+                    ? 'Shows every week'
+                    : _weekParity == WeekParity.odd
+                        ? 'Odd weeks only'
+                        : 'Even weeks only'),
+                value: _weekParity != WeekParity.any,
+                onChanged: (on) => setState(() {
+                  _weekParity = on ? WeekParity.odd : WeekParity.any;
+                }),
+              ),
+              if (_weekParity != WeekParity.any)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: SegmentedButton<WeekParity>(
+                    segments: const [
+                      ButtonSegment(
+                          value: WeekParity.odd, label: Text('Odd weeks')),
+                      ButtonSegment(
+                          value: WeekParity.even, label: Text('Even weeks')),
+                    ],
+                    selected: {_weekParity},
+                    onSelectionChanged: (s) =>
+                        setState(() => _weekParity = s.first),
+                  ),
+                ),
+              const SizedBox(height: 8),
+            ],
 
             Row(
               children: [

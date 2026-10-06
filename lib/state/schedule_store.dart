@@ -48,6 +48,11 @@ class ScheduleStore extends ChangeNotifier {
   bool _notificationSound = false;
   bool _notificationVibrate = true;
 
+  // Week-counter anchor (Monday 00:00 of Week 1), mirrored from SettingsStore,
+  // so the store can filter odd/even-week items and compute week numbers for
+  // future occurrences. Defaults to the Monday of the current week.
+  DateTime _weekAnchor = _mondayOf(DateTime.now());
+
   ScheduleStore({NotificationService? notifications})
       : _notifications = notifications ?? NotificationService.instance;
 
@@ -64,6 +69,28 @@ class ScheduleStore extends ChangeNotifier {
     await _rescheduleAll();
   }
 
+  /// Sync the week-counter anchor from settings; reschedules + refreshes the
+  /// widget so odd/even filtering and the week number update immediately.
+  Future<void> applyWeekAnchor(DateTime anchor) async {
+    _weekAnchor = _mondayOf(anchor);
+    notifyListeners();
+    await _rescheduleAll();
+  }
+
+  static DateTime _mondayOf(DateTime d) {
+    final dayOnly = DateTime(d.year, d.month, d.day);
+    return dayOnly.subtract(Duration(days: dayOnly.weekday - 1));
+  }
+
+  /// 1-based week number for [when], Monday-boundaried from the anchor.
+  int weekNumberFor(DateTime when) {
+    final diffDays = _mondayOf(when).difference(_weekAnchor).inDays;
+    final weeks = (diffDays / 7).floor();
+    return weeks < 0 ? 1 : weeks + 1;
+  }
+
+  int get currentWeekNumber => weekNumberFor(DateTime.now());
+
   // ---------------------------------------------------------------------------
   // Reads
   // ---------------------------------------------------------------------------
@@ -78,9 +105,15 @@ class ScheduleStore extends ChangeNotifier {
   List<Homework> get homeworks => [..._homeworks];
 
   /// Weekly items that fall on a given weekday, sorted by start time.
+  /// Odd/even-week items are filtered to the CURRENT week.
   List<ScheduleItem> weeklyItemsForDay(int weekday) {
-    final list =
-        _items.where((e) => !e.oneTime && e.weekday == weekday).toList();
+    final wk = currentWeekNumber;
+    final list = _items
+        .where((e) =>
+            !e.oneTime &&
+            e.weekday == weekday &&
+            e.weekParity.matchesWeek(wk))
+        .toList();
     list.sort((a, b) => a.start.inMinutes.compareTo(b.start.inMinutes));
     return list;
   }
@@ -96,8 +129,11 @@ class ScheduleStore extends ChangeNotifier {
     final startOfWeek = startOfToday.subtract(Duration(days: now.weekday - 1));
     final endOfWeek = startOfWeek.add(const Duration(days: 7)); // exclusive
 
+    final wk = currentWeekNumber;
     final list = _items.where((e) {
-      if (!e.oneTime) return e.weekday == weekday;
+      if (!e.oneTime) {
+        return e.weekday == weekday && e.weekParity.matchesWeek(wk);
+      }
       final d = e.date;
       if (d == null) return false;
       final dayOnly = DateTime(d.year, d.month, d.day);
@@ -172,7 +208,22 @@ class ScheduleStore extends ChangeNotifier {
     final result = <UpcomingOccurrence>[];
     for (final item in _items) {
       if (types != null && !types.contains(item.type)) continue;
-      final next = item.nextOccurrence(now);
+      var next = item.nextOccurrence(now);
+      // For odd/even-week items, roll forward to the next occurrence that
+      // actually falls in a matching week (weekly items only).
+      if (next != null && !item.oneTime && item.weekParity != WeekParity.any) {
+        var guard = 0;
+        while (next != null &&
+            !item.weekParity.matchesWeek(weekNumberFor(next)) &&
+            guard < 8) {
+          next = item.nextOccurrence(next.add(const Duration(days: 1)));
+          guard++;
+        }
+        if (next != null &&
+            !item.weekParity.matchesWeek(weekNumberFor(next))) {
+          next = null;
+        }
+      }
       if (next != null) result.add(UpcomingOccurrence(item, next));
     }
     result.sort((a, b) => a.when.compareTo(b.when));
@@ -335,10 +386,21 @@ class ScheduleStore extends ChangeNotifier {
     // platform exception here (e.g. exact-alarm permission, widget plugin)
     // propagate up and break the calling flow (like closing the editor).
     try {
+      // For odd/even-week items, resolve the next matching occurrence's start
+      // so the notification service can schedule a one-shot (no wrong-week
+      // reminders).
+      final parityNextStart = <String, DateTime?>{};
+      final nowForParity = DateTime.now();
+      for (final it in _items) {
+        if (!it.oneTime && it.weekParity != WeekParity.any) {
+          parityNextStart[it.id] = _nextMatchingStart(it, nowForParity);
+        }
+      }
       await _notifications.rescheduleAll(
         items: _items,
         homeworks: _homeworks,
         tasks: _tasks,
+        parityNextStart: parityNextStart,
         sound: _notificationSound,
         vibrate: _notificationVibrate,
       );
@@ -347,7 +409,8 @@ class ScheduleStore extends ChangeNotifier {
     }
     try {
       // Push the next several occurrences so the widget can roll over to the
-      // next one NATIVELY as each passes (without the app running).
+      // next one NATIVELY as each passes (without the app running). Includes
+      // the current week number for display.
       final upcomingForWidget = widgetUpcoming(limit: 8);
       final payload = upcomingForWidget
           .map((o) => <String, dynamic>{
@@ -358,10 +421,28 @@ class ScheduleStore extends ChangeNotifier {
                 'location': o.item.location,
               })
           .toList();
-      await WidgetService.instance.updateOccurrences(payload);
+      await WidgetService.instance.updateOccurrences(
+        payload,
+        weekNumber: currentWeekNumber,
+      );
     } catch (e) {
       debugPrint('rescheduleAll (widget) failed: $e');
     }
+  }
+
+  /// The start DateTime of the next occurrence of a weekly parity [item] that
+  /// falls in a matching (odd/even) week, searching forward from [from].
+  DateTime? _nextMatchingStart(ScheduleItem item, DateTime from) {
+    var next = item.nextOccurrence(from);
+    var guard = 0;
+    while (next != null &&
+        !item.weekParity.matchesWeek(weekNumberFor(next)) &&
+        guard < 8) {
+      next = item.nextOccurrence(next.add(const Duration(days: 1)));
+      guard++;
+    }
+    if (next == null) return null;
+    return item.weekParity.matchesWeek(weekNumberFor(next)) ? next : null;
   }
 
   // ---------------------------------------------------------------------------

@@ -24,10 +24,16 @@ class WidgetService {
 
   /// Save the next [occurrences] (already sorted soonest-first) for the widget.
   /// Each entry must contain: epoch (int millis), type, title, time, location.
-  Future<void> updateOccurrences(List<Map<String, dynamic>> occurrences) async {
+  /// [weekNumber] is the current week counter value, shown at the top.
+  Future<void> updateOccurrences(
+    List<Map<String, dynamic>> occurrences, {
+    int weekNumber = 1,
+  }) async {
     try {
       await HomeWidget.saveWidgetData<String>(
           'occurrences', jsonEncode(occurrences));
+      await HomeWidget.saveWidgetData<String>(
+          'week_number', weekNumber.toString());
       await HomeWidget.updateWidget(name: _androidProvider);
     } catch (e) {
       // Widgets are best-effort; never let this crash the app.

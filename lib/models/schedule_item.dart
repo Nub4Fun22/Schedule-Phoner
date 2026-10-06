@@ -413,6 +413,44 @@ class Task {
 }
 
 // ============================================================================
+// Week parity — lets a weekly item show only on odd or even weeks.
+// ============================================================================
+
+/// Whether a weekly item is restricted to odd/even weeks (relative to the
+/// week counter). [any] = every week (the default, "off").
+enum WeekParity { any, odd, even }
+
+extension WeekParityX on WeekParity {
+  String get storageKey => name;
+  String get label {
+    switch (this) {
+      case WeekParity.any:
+        return 'Every week';
+      case WeekParity.odd:
+        return 'Odd weeks only';
+      case WeekParity.even:
+        return 'Even weeks only';
+    }
+  }
+
+  static WeekParity fromKey(String? key) =>
+      WeekParity.values.firstWhere((e) => e.name == key,
+          orElse: () => WeekParity.any);
+
+  /// Does an item with this parity show on week number [weekNumber] (1-based)?
+  bool matchesWeek(int weekNumber) {
+    switch (this) {
+      case WeekParity.any:
+        return true;
+      case WeekParity.odd:
+        return weekNumber.isOdd;
+      case WeekParity.even:
+        return weekNumber.isEven;
+    }
+  }
+}
+
+// ============================================================================
 // ScheduleItem — the main academic item (course/lab/test/project/etc.)
 // ============================================================================
 
@@ -446,6 +484,11 @@ class ScheduleItem {
   /// Minutes before start to remind (for the item's own reminder).
   final int reminderMinutesBefore;
 
+  /// Restrict a weekly item to odd/even weeks (relative to the week counter).
+  /// Defaults to [WeekParity.any] (shows every week). Ignored for one-time
+  /// items.
+  final WeekParity weekParity;
+
   const ScheduleItem({
     required this.id,
     required this.type,
@@ -460,6 +503,7 @@ class ScheduleItem {
     this.colorValue = 0xFF3F51B5,
     this.notificationsEnabled = true,
     this.reminderMinutesBefore = 10,
+    this.weekParity = WeekParity.any,
   });
 
   int get priority => type.priority;
@@ -505,6 +549,7 @@ class ScheduleItem {
     int? colorValue,
     bool? notificationsEnabled,
     int? reminderMinutesBefore,
+    WeekParity? weekParity,
   }) =>
       ScheduleItem(
         id: id,
@@ -522,6 +567,7 @@ class ScheduleItem {
             notificationsEnabled ?? this.notificationsEnabled,
         reminderMinutesBefore:
             reminderMinutesBefore ?? this.reminderMinutesBefore,
+        weekParity: weekParity ?? this.weekParity,
       );
 
   Map<String, dynamic> toJson() => {
@@ -538,6 +584,7 @@ class ScheduleItem {
         'colorValue': colorValue,
         'notificationsEnabled': notificationsEnabled,
         'reminderMinutesBefore': reminderMinutesBefore,
+        'weekParity': weekParity.storageKey,
       };
 
   factory ScheduleItem.fromJson(Map<String, dynamic> j) => ScheduleItem(
@@ -554,6 +601,7 @@ class ScheduleItem {
         colorValue: (j['colorValue'] ?? 0xFF3F51B5) as int,
         notificationsEnabled: (j['notificationsEnabled'] ?? true) as bool,
         reminderMinutesBefore: (j['reminderMinutesBefore'] ?? 10) as int,
+        weekParity: WeekParityX.fromKey(j['weekParity'] as String?),
       );
 
   int get notificationId => id.hashCode & 0x7FFFFFFF;
