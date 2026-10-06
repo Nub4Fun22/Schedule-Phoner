@@ -85,6 +85,15 @@ class SettingsStore extends ChangeNotifier {
     await prefs.setString(_kWeekAnchor, _weekAnchor.toIso8601String());
   }
 
+  /// Directly declare that the CURRENT week is week [number] (1-based). This
+  /// shifts the anchor so this week reads as [number]; e.g. number=2 sets the
+  /// anchor to the Monday of last week.
+  Future<void> setCurrentWeekNumber(int number) async {
+    final n = number < 1 ? 1 : number;
+    final thisMonday = _mondayOf(DateTime.now());
+    await setWeekAnchor(thisMonday.subtract(Duration(days: (n - 1) * 7)));
+  }
+
   /// Reset the counter so THIS week becomes Week 1 again.
   Future<void> resetWeekCounter() async {
     await setWeekAnchor(DateTime.now());

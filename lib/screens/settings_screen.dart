@@ -138,7 +138,9 @@ class SettingsScreen extends StatelessWidget {
             title: const Text('Current week'),
             subtitle: Text('Week ${settings.currentWeekNumber} '
                 '(${settings.currentWeekNumber.isEven ? 'even' : 'odd'}) • '
-                'shown on the grid and widget'),
+                'tap to set which week you\'re in'),
+            trailing: const Icon(Icons.edit_outlined),
+            onTap: () => _setCurrentWeek(context, settings, store),
           ),
           ListTile(
             leading: const Icon(Icons.event_outlined),
@@ -457,6 +459,67 @@ class SettingsScreen extends StatelessWidget {
 
   static String _fmtDate(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  Future<void> _setCurrentWeek(BuildContext context, SettingsStore settings,
+      ScheduleStore store) async {
+    int value = settings.currentWeekNumber;
+    final picked = await showDialog<int>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Current week number'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Which week are you in right now?'),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    iconSize: 36,
+                    icon: const Icon(Icons.remove_circle_outline),
+                    onPressed: value <= 1
+                        ? null
+                        : () => setLocal(() => value--),
+                  ),
+                  SizedBox(
+                    width: 64,
+                    child: Text('$value',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(ctx).textTheme.headlineMedium),
+                  ),
+                  IconButton(
+                    iconSize: 36,
+                    icon: const Icon(Icons.add_circle_outline),
+                    onPressed: value >= 53
+                        ? null
+                        : () => setLocal(() => value++),
+                  ),
+                ],
+              ),
+              Text('${value.isEven ? 'Even' : 'Odd'} week',
+                  style: Theme.of(ctx).textTheme.bodySmall),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(value),
+                child: const Text('Set')),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    await settings.setCurrentWeekNumber(picked);
+    await store.applyWeekAnchor(settings.weekAnchor);
+    if (context.mounted) {
+      _snack(context, 'Now on week ${settings.currentWeekNumber}');
+    }
+  }
 
   Future<void> _pickWeekAnchor(BuildContext context, SettingsStore settings,
       ScheduleStore store) async {
