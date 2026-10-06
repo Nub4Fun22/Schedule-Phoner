@@ -33,9 +33,20 @@ A clean Flutter timetable app for your school schedule. **Android now, iOS later
   of the lab/event, or **"alert me every day until then"** at a chosen hour.
 - **Custom reminder lead times** — pick any hours + minutes (e.g. **1h 30m**),
   not just fixed presets, for an item's own reminder and for homework/tasks.
+- **Quick add** — the **Add** button lets you create either a **single item**
+  or a whole **Subject** at once (a Course + a Lab/Seminar + an optional
+  Project, sharing the name & color but created as independent items you can
+  edit/delete separately).
+- **Week counter & odd/even weeks** — a settable **week number** (shown on the
+  grid and widget, rolling over every Monday). Any weekly item can be limited
+  to **odd** or **even** weeks (off by default), so e.g. a lab on odd weeks and
+  a project on even weeks can share the same slot. Set the current week or reset
+  it to 1 in Settings.
 - **Four views** (bottom navigation):
   - **Grid** — Excel-like weekly grid of recurring items (weekend shown by
-    default). Also surfaces one-time items falling in the current week.
+    default). Also surfaces one-time items falling in the current week. A
+    **"show all weeks"** toggle displays both odd & even items, with
+    same-slot overlaps shown **side by side** and tagged Odd/Even.
   - **Day** — a chosen weekday's items as a list, with homework badges. Opens
     on today.
   - **What's next** — everything upcoming by time, soonest first, with a countdown.
@@ -214,10 +225,15 @@ sources").
 
 Two easy options:
 
-1. **In the app (no code):** Tap **Add**, choose a type (Course, Lab, Seminar,
-   Test, Project, Presentation, Exam, or Event), fill in the details, and save.
-   For a Lab/Seminar you can add **homework**, and for an Event you can add
-   **tasks** — inline while creating, or later from the item's details screen.
+1. **In the app (no code):** Tap **Add**, then pick:
+   - **Subject** — add a Course + a Lab/Seminar (+ optional Project) in one
+     go, sharing the subject's name & color; or
+   - **Single item** — choose a type (Course, Lab, Seminar, Test, Project,
+     Presentation, Exam, or Event), fill in the details, and save.
+
+   For a Lab/Seminar/Project you can add **homework/deadlines**, and for an
+   Event you can add **tasks** — inline while creating, or later from the
+   item's details screen. Weekly items can be limited to **odd/even weeks**.
    Everything is saved automatically on-device.
 2. **Try the demo:** **Settings → Import demo data** loads one example of each
    type (kept alongside your own items); **Delete demo data** removes just the

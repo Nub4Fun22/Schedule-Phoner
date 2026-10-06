@@ -122,7 +122,8 @@ class ScheduleStore extends ChangeNotifier {
   /// on that day, PLUS any one-time items whose date falls in the CURRENT week
   /// (Mon–Sun) on that weekday. Sorted by start time. This is why a one-time
   /// test added for "this Saturday" now appears in Saturday's grid column.
-  List<ScheduleItem> gridItemsForDay(int weekday) {
+  List<ScheduleItem> gridItemsForDay(int weekday,
+      {bool includeAllParities = false}) {
     final now = DateTime.now();
     // Monday 00:00 of the current week.
     final startOfToday = DateTime(now.year, now.month, now.day);
@@ -132,7 +133,9 @@ class ScheduleStore extends ChangeNotifier {
     final wk = currentWeekNumber;
     final list = _items.where((e) {
       if (!e.oneTime) {
-        return e.weekday == weekday && e.weekParity.matchesWeek(wk);
+        if (e.weekday != weekday) return false;
+        // When "show all weeks" is on, include both parities.
+        return includeAllParities || e.weekParity.matchesWeek(wk);
       }
       final d = e.date;
       if (d == null) return false;

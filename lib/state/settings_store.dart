@@ -13,11 +13,13 @@ class SettingsStore extends ChangeNotifier {
   static const String _kShowWeekend = 'settings_show_weekend_grid';
   static const String _kDefaultReminder = 'settings_default_reminder_minutes';
   static const String _kWeekAnchor = 'settings_week_anchor'; // ISO date (Monday)
+  static const String _kShowAllWeeks = 'settings_show_all_weeks';
 
   bool _notificationSound = false; // silent by default (per the app spec)
   bool _vibrate = false; // vibration OFF by default
   ThemeMode _themeMode = ThemeMode.system;
   bool _showWeekendInGrid = true; // show weekend columns by default
+  bool _showAllWeeks = false; // grid shows only the current week's parity
   int _defaultReminderMinutes = 10;
 
   /// Monday 00:00 of "Week 1". The current week number counts Monday-boundaries
@@ -34,6 +36,10 @@ class SettingsStore extends ChangeNotifier {
   bool get vibrate => _vibrate;
   ThemeMode get themeMode => _themeMode;
   bool get showWeekendInGrid => _showWeekendInGrid;
+
+  /// When true, the grid shows items of BOTH parities (ignores odd/even).
+  bool get showAllWeeks => _showAllWeeks;
+
   int get defaultReminderMinutes => _defaultReminderMinutes;
 
   /// Monday 00:00 of Week 1.
@@ -63,6 +69,7 @@ class SettingsStore extends ChangeNotifier {
     _vibrate = prefs.getBool(_kVibrate) ?? false; // OFF by default
     _themeMode = _themeModeFromString(prefs.getString(_kThemeMode));
     _showWeekendInGrid = prefs.getBool(_kShowWeekend) ?? true; // ON by default
+    _showAllWeeks = prefs.getBool(_kShowAllWeeks) ?? false;
     _defaultReminderMinutes = prefs.getInt(_kDefaultReminder) ?? 10;
     final anchorStr = prefs.getString(_kWeekAnchor);
     if (anchorStr != null) {
@@ -126,6 +133,13 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kShowWeekend, value);
+  }
+
+  Future<void> setShowAllWeeks(bool value) async {
+    _showAllWeeks = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kShowAllWeeks, value);
   }
 
   Future<void> setDefaultReminderMinutes(int minutes) async {

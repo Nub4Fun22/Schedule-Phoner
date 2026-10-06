@@ -21,7 +21,9 @@ class WeekGridScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = context.watch<ScheduleStore>();
-    final showWeekend = context.watch<SettingsStore>().showWeekendInGrid;
+    final settings = context.watch<SettingsStore>();
+    final showWeekend = settings.showWeekendInGrid;
+    final showAll = settings.showAllWeeks;
     final days = showWeekend ? Weekday.fullWeek : Weekday.schoolWeek;
     final weekNumber = store.currentWeekNumber;
 
@@ -32,7 +34,10 @@ class WeekGridScreen extends StatelessWidget {
     // one-time items).
     const int defaultStartHour = 7;
     const int defaultEndHour = 22;
-    final displayed = [for (final d in days) ...store.gridItemsForDay(d)];
+    final displayed = [
+      for (final d in days)
+        ...store.gridItemsForDay(d, includeAllParities: showAll)
+    ];
     int startHour = defaultStartHour;
     int endHour = defaultEndHour;
     if (displayed.isNotEmpty) {
@@ -50,7 +55,7 @@ class WeekGridScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _weekBanner(context, weekNumber),
+        _weekBanner(context, weekNumber, showAll, settings),
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -77,7 +82,7 @@ class WeekGridScreen extends StatelessWidget {
                                 _timeColumn(context, startHour, endHour),
                                 for (final day in days)
                                   _dayColumn(context, store, day, colWidth,
-                                      startHour, gridHeight),
+                                      startHour, gridHeight, showAll),
                               ],
                             ),
                           ),
@@ -94,25 +99,32 @@ class WeekGridScreen extends StatelessWidget {
     );
   }
 
-  Widget _weekBanner(BuildContext context, int weekNumber) {
+  Widget _weekBanner(BuildContext context, int weekNumber, bool showAll,
+      SettingsStore settings) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       color: scheme.surfaceContainerHighest,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
       child: Row(
         children: [
-          Icon(Icons.calendar_month_outlined,
-              size: 18, color: scheme.primary),
+          Icon(Icons.calendar_month_outlined, size: 18, color: scheme.primary),
           const SizedBox(width: 8),
           Text('Week $weekNumber',
               style: Theme.of(context)
                   .textTheme
                   .titleMedium
                   ?.copyWith(fontWeight: FontWeight.w700)),
-          const Spacer(),
-          Text(weekNumber.isEven ? 'Even week' : 'Odd week',
+          const SizedBox(width: 6),
+          Text('(${weekNumber.isEven ? 'even' : 'odd'})',
               style: Theme.of(context).textTheme.bodySmall),
+          const Spacer(),
+          // Toggle: show every item regardless of odd/even parity.
+          Text('All weeks', style: Theme.of(context).textTheme.bodySmall),
+          Switch(
+            value: showAll,
+            onChanged: (v) => settings.setShowAllWeeks(v),
+          ),
         ],
       ),
     );
@@ -173,10 +185,23 @@ class WeekGridScreen extends StatelessWidget {
   }
 
   Widget _dayColumn(BuildContext context, ScheduleStore store, int day,
-      double colWidth, int startHour, double gridHeight) {
-    final items = store.gridItemsForDay(day);
+      double colWidth, int startHour, double gridHeight, bool showAll) {
+    final items = store.gridItemsForDay(day, includeAllParities: showAll);
     final dividerColor = Theme.of(context).dividerColor.withOpacity(0.25);
     final rows = (gridHeight / _hourHeight).ceil();
+
+    // Group items that overlap in time so they can be laid out side-by-side
+    // (e.g. an odd-week lab and an even-week project in the same slot when
+    // "show all weeks" is on). Non-overlapping items each form their own group.
+    final groups = _overlapGroups(items);
+    final blocks = <Widget>[];
+    for (final group in groups) {
+      final n = group.length;
+      for (var i = 0; i < n; i++) {
+        blocks.add(_block(context, store, group[i], startHour, colWidth,
+            slotIndex: i, slotCount: n, showAll: showAll));
+      }
+    }
 
     return Container(
       width: colWidth,
@@ -200,15 +225,37 @@ class WeekGridScreen extends StatelessWidget {
                 ),
             ],
           ),
-          for (final item in items)
-            _block(context, store, item, startHour, colWidth),
+          ...blocks,
         ],
       ),
     );
   }
 
+  /// Partition [items] (sorted by start) into groups of mutually time-
+  /// overlapping items. Each group is rendered as side-by-side sub-columns.
+  List<List<ScheduleItem>> _overlapGroups(List<ScheduleItem> items) {
+    final groups = <List<ScheduleItem>>[];
+    for (final item in items) {
+      var placed = false;
+      for (final group in groups) {
+        // Overlaps if it intersects any item already in the group.
+        final overlaps = group.any((g) =>
+            item.start.inMinutes < g.end.inMinutes &&
+            g.start.inMinutes < item.end.inMinutes);
+        if (overlaps) {
+          group.add(item);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) groups.add([item]);
+    }
+    return groups;
+  }
+
   Widget _block(BuildContext context, ScheduleStore store, ScheduleItem item,
-      int startHour, double colWidth) {
+      int startHour, double colWidth,
+      {int slotIndex = 0, int slotCount = 1, bool showAll = false}) {
     final top = (item.start.inMinutes - startHour * 60) / 60 * _hourHeight;
     final height =
         (item.durationMinutes / 60 * _hourHeight).clamp(26.0, double.infinity);
@@ -216,10 +263,24 @@ class WeekGridScreen extends StatelessWidget {
     final hasHw = item.type.carriesHomework &&
         store.activeHomeworksForLab(item.id).isNotEmpty;
 
+    // Side-by-side layout within a group of overlapping items.
+    const outerPad = 2.0;
+    const gap = 2.0;
+    final usable = colWidth - outerPad * 2;
+    final slotWidth = (usable - gap * (slotCount - 1)) / slotCount;
+    final left = outerPad + slotIndex * (slotWidth + gap);
+
+    // Show a parity badge only when "all weeks" is on and the item is
+    // restricted (so you can tell which belongs to odd vs even).
+    final parityBadge = showAll && item.weekParity != WeekParity.any
+        ? (item.weekParity == WeekParity.odd ? 'Odd' : 'Even')
+        : null;
+    final narrow = slotWidth < 90;
+
     return Positioned(
       top: top,
-      left: 2,
-      width: colWidth - 4,
+      left: left,
+      width: slotWidth,
       height: height - 2,
       child: Material(
         color: item.color,
@@ -229,14 +290,14 @@ class WeekGridScreen extends StatelessWidget {
           onTap: () => Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => ItemDetailsScreen(itemId: item.id))),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
                     Icon(item.type.icon, size: 12, color: fg),
-                    const SizedBox(width: 3),
+                    if (!narrow) const SizedBox(width: 3),
                     Expanded(
                       child: Text(item.title,
                           maxLines: 1,
@@ -247,13 +308,29 @@ class WeekGridScreen extends StatelessWidget {
                               fontSize: 12)),
                     ),
                     if (hasHw) Icon(Icons.assignment_late, size: 12, color: fg),
-                    if (item.notificationsEnabled)
+                    if (item.notificationsEnabled && !narrow)
                       Icon(Icons.notifications_active, size: 11, color: fg),
                   ],
                 ),
-                if (height > 42)
+                if (parityBadge != null)
+                  Container(
+                    margin: const EdgeInsets.only(top: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: fg.withOpacity(0.22),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(parityBadge,
+                        style: TextStyle(
+                            color: fg,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                if (height > 42 && parityBadge == null)
                   Text(item.start.format(),
-                      style: TextStyle(color: fg.withOpacity(0.9), fontSize: 10)),
+                      style:
+                          TextStyle(color: fg.withOpacity(0.9), fontSize: 10)),
               ],
             ),
           ),

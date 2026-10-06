@@ -7,6 +7,7 @@ import 'day_list_screen.dart';
 import 'item_editor_screen.dart';
 import 'priority_screen.dart';
 import 'settings_screen.dart';
+import 'subject_wizard_screen.dart';
 import 'week_grid_screen.dart';
 import 'whats_next_screen.dart';
 
@@ -63,6 +64,42 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// The Add button first asks what to add: a whole subject or a single item.
+  Future<void> _onAddPressed() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.library_books_outlined),
+              title: const Text('Subject'),
+              subtitle: const Text(
+                  'Add a course + lab/seminar (+ optional project) at once'),
+              onTap: () => Navigator.of(ctx).pop('subject'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.add_task_outlined),
+              title: const Text('Single item'),
+              subtitle: const Text(
+                  'Add one course, lab, test, exam, event, …'),
+              onTap: () => Navigator.of(ctx).pop('item'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'subject') {
+      await _openSubjectWizard();
+    } else {
+      await _openEditor();
+    }
+  }
+
   Future<void> _openEditor() async {
     final result = await Navigator.of(context).push<ItemSaveResult>(
       MaterialPageRoute(builder: (_) => const ItemEditorScreen()),
@@ -72,16 +109,30 @@ class _HomeScreenState extends State<HomeScreen> {
       final msg = result.isNew
           ? '"$name" has been added successfully'
           : '"$name" has been updated';
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(msg),
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+      _showSnack(msg);
     }
+  }
+
+  Future<void> _openSubjectWizard() async {
+    final result = await Navigator.of(context).push<SubjectSaveResult>(
+      MaterialPageRoute(builder: (_) => const SubjectWizardScreen()),
+    );
+    if (result != null && mounted) {
+      _showSnack('"${result.name}" added '
+          '(${result.count} item${result.count == 1 ? '' : 's'})');
+    }
+  }
+
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
   }
 
   @override
@@ -115,7 +166,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // Add button only on the Grid tab.
       floatingActionButton: _tab == 0
           ? FloatingActionButton.extended(
-              onPressed: _openEditor,
+              onPressed: _onAddPressed,
               icon: const Icon(Icons.add),
               label: const Text('Add'),
             )

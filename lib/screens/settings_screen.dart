@@ -129,6 +129,14 @@ class SettingsScreen extends StatelessWidget {
             value: settings.showWeekendInGrid,
             onChanged: (val) => settings.setShowWeekendInGrid(val),
           ),
+          SwitchListTile(
+            secondary: const Icon(Icons.calendar_view_week_outlined),
+            title: const Text('Show all weeks in grid'),
+            subtitle: const Text(
+                'Show odd & even items together (overlaps appear side by side)'),
+            value: settings.showAllWeeks,
+            onChanged: (val) => settings.setShowAllWeeks(val),
+          ),
 
           const Divider(),
           _sectionHeader(context, 'Week counter'),
